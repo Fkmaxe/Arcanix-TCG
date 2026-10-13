@@ -63,7 +63,10 @@ export default function ClassementPage() {
                                     <p className="truncate text-sm font-medium">
                                         {l.prenom} {l.nom} {l.moi && <span className="text-ember text-xs">(toi)</span>}
                                     </p>
-                                    <p className="text-muted-foreground text-xs">{l.classe} · {l.presences} présence{l.presences > 1 ? "s" : ""}</p>
+                                    <p className="text-muted-foreground text-xs">
+                                        {l.classe} · {l.presences} présence{l.presences > 1 ? "s" : ""}
+                                        {l.bonus !== 0 && <span className={l.bonus > 0 ? "text-success" : "text-destructive"}> · {l.bonus > 0 ? "+" : ""}{formatPoints(l.bonus)} bonus</span>}
+                                    </p>
                                 </div>
                                 <span className="font-display text-gold text-base font-bold tabular-nums">{formatPoints(l.points)}</span>
                             </li>

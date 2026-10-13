@@ -13,9 +13,11 @@ import pytest
 import config
 from cogs.annonces import Annonces
 from cogs.compte import Compte, InscriptionModal
+from cogs.inscriptions import BoutonInscription
+from utils import embeds
 from cogs.membres import Membres
 from cogs.moderation import Moderation, PresenceView, SeanceModal
-from tests.fakes import FakeBot, FakeInteraction, FakeUser, remplir, run_async
+from tests.fakes import FakeBot, FakeInteraction, FakeMessage, FakeUser, remplir, run_async
 from utils.api import ApiClient
 
 API = os.getenv("ARCANIX_E2E_API")
@@ -115,6 +117,31 @@ async def test_parcours_complet_du_bot():
         inter = FakeInteraction(lie)
         await compte.lier.callback(compte, inter, code=code["code"].lower())
         assert "Compte lié" in inter.dernier.texte, inter.dernier.texte
+
+        # 9b. Bouton « Je viens » sous l'annonce : inscription puis désinscription, compteur à jour
+        sid = choix[0].value
+        annonce = FakeMessage(bot.channel.messages[0].embed if bot.channel.messages else embeds.embed("x"))
+        inter = FakeInteraction(nouveau, client=bot, message=annonce)
+        await BoutonInscription("in", sid).callback(inter)
+        assert "inscrit·e" in inter.dernier.texte, inter.dernier.texte
+        assert any(f.name == "👥 Inscrits" and f.value.startswith("1") for f in annonce.embeds[0].fields)
+        inter = FakeInteraction(nouveau, client=bot, message=annonce)
+        await BoutonInscription("out", sid).callback(inter)
+        assert "Désinscription" in inter.dernier.texte
+
+        # 9c. /mod points : bonus par l'admin, visible dans /points
+        cible = FakeUser(id=nouveau.id)
+        cible.mention = f"<@{nouveau.id}>"
+        inter = FakeInteraction(admin)
+        await mod.points.callback(mod, inter, membre=cible, points=1.5, motif="Aide au rangement", categorie=None)
+        assert "+1,5 pts" in inter.dernier.texte, inter.dernier.texte
+        inter = FakeInteraction(nouveau)
+        await membres.points.callback(membres, inter)
+        assert "4 points" in inter.dernier.texte, inter.dernier.texte  # 2,5 (présence) + 1,5 (bonus)
+
+        # 9d. Rôles : le nouveau membre est lié
+        roles = await bot.api.roles()
+        assert str(nouveau.id) in roles["membres"] and len(roles["top3"]) <= 3
 
         # 10. /reinitialiser, /classement, /profil, /historique, /seances
         for cmd, cible in ((compte.reinitialiser, compte), (membres.historique, membres), (membres.seances, membres)):

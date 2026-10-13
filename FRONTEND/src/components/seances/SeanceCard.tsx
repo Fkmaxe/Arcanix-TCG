@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { ChevronRight, Clock, MapPin, Users } from "lucide-react";
+import { CheckCircle2, ChevronRight, Clock, Hourglass, MapPin, Trophy, Users } from "lucide-react";
 import type { Seance } from "@/lib/types";
 import { dateParts, formatHeure, formatPoints, relativeDay, todayIso } from "@/lib/format";
 import { cn } from "@/lib/utils";
@@ -33,12 +33,26 @@ export function SeanceCard({ seance, href, showCount = false }: { seance: Seance
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <h3 className="truncate font-sans text-[15px] font-semibold tracking-normal">{seance.nom}</h3>
                     {rel && <span className="text-ember text-xs font-semibold">{rel}</span>}
+                    {seance.mon_inscription === "inscrit" && !passe && (
+                        <span className="text-success inline-flex items-center gap-1 text-xs font-semibold"><CheckCircle2 className="size-3.5" />Inscrit·e</span>
+                    )}
+                    {seance.mon_inscription === "attente" && !passe && (
+                        <span className="text-gold inline-flex items-center gap-1 text-xs font-semibold"><Hourglass className="size-3.5" />En attente</span>
+                    )}
                 </div>
                 <div className="text-muted-foreground mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
                     <JeuBadge jeu={seance.jeu} />
                     {heure && <span className="inline-flex items-center gap-1"><Clock className="size-3.5" />{heure}</span>}
                     {seance.lieu && <span className="inline-flex min-w-0 items-center gap-1"><MapPin className="size-3.5 shrink-0" /><span className="truncate">{seance.lieu}</span></span>}
                     {showCount && <span className="inline-flex items-center gap-1"><Users className="size-3.5" />{seance.nb_presents}</span>}
+                    {!passe && (seance.nb_inscrits > 0 || seance.places_max) && (
+                        <span className="inline-flex items-center gap-1" title="Inscrits">
+                            <Users className="size-3.5" />
+                            {seance.nb_inscrits}{seance.places_max ? `/${seance.places_max}` : ""}
+                            {seance.places_max && seance.nb_inscrits >= seance.places_max && <span className="text-ember font-semibold">complet</span>}
+                        </span>
+                    )}
+                    {seance.a_resultats && <span className="text-gold inline-flex items-center gap-1"><Trophy className="size-3.5" />Résultats</span>}
                 </div>
             </div>
             <div className="flex shrink-0 items-center gap-1">

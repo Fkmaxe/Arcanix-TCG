@@ -2,13 +2,16 @@
 
 import { useState } from "react";
 import useSWR from "swr";
-import { Copy, KeyRound, MessageCircle, MoreVertical, Pencil, Plus, Search, Trash2, Users } from "lucide-react";
+import Link from "next/link";
+import { Copy, History, KeyRound, Mail, MessageCircle, MoreVertical, Pencil, Plus, Search, Sparkles, Trash2, Users } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmButton } from "@/components/common/ConfirmButton";
 import { DataTable, Pagination } from "@/components/common/DataTable";
 import { PageHeader } from "@/components/common/PageHeader";
 import { ErrorBox } from "@/components/common/States";
 import UserForm from "@/components/users/UserForm";
+import { AjustementForm } from "@/components/points/AjustementForm";
+import { useConfig } from "@/lib/useConfig";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -37,6 +40,8 @@ export default function GestionMembresPage() {
     const [page, setPage] = useState(1);
     const [editing, setEditing] = useState<User | "new" | null>(null);
     const [lien, setLien] = useState<{ user: User; url: string; heures: number } | null>(null);
+    const [bonus, setBonus] = useState<User | null>(null);
+    const { smtp } = useConfig();
     const q = useDebounced(query.trim());
     const params = { q, role: role === "tous" ? undefined : role, page, limit: LIMIT };
     const { data, error, isLoading, mutate } = useSWR(["/users", params], () => UsersApi.list(params));
@@ -63,7 +68,24 @@ export default function GestionMembresPage() {
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
                     <DropdownMenuItem onSelect={() => setEditing(u)}><Pencil /> Modifier</DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setBonus(u)}><Sparkles /> Bonus / malus</DropdownMenuItem>
+                    <DropdownMenuItem asChild><Link href={`/gestion/journal?membre=${u.id}`}><History /> Historique</Link></DropdownMenuItem>
+                    <DropdownMenuItem asChild><Link href={`/gestion/points?membre=${u.id}`}><Sparkles /> Ses bonus & malus</Link></DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => genererLien(u)}><KeyRound /> Lien de mot de passe</DropdownMenuItem>
+                    {smtp && (
+                        <DropdownMenuItem
+                            onSelect={async () => {
+                                try {
+                                    await UsersApi.lienMotDePasse(u.id, true);
+                                    toast.success(`Lien envoyé à ${u.adresse_mail}`);
+                                } catch (err) {
+                                    toast.error(errorMessage(err));
+                                }
+                            }}
+                        >
+                            <Mail /> Envoyer le lien par email
+                        </DropdownMenuItem>
+                    )}
                     {admin && u.id !== me?.id && (
                         <>
                             <DropdownMenuSeparator />
@@ -155,6 +177,16 @@ export default function GestionMembresPage() {
                     {editing && (
                         <UserForm user={editing === "new" ? undefined : editing} onSuccess={() => { setEditing(null); mutate(); }} />
                     )}
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={!!bonus} onOpenChange={(o) => !o && setBonus(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Bonus ou malus</DialogTitle>
+                        <DialogDescription>Compté dans le classement du semestre et inscrit au journal.</DialogDescription>
+                    </DialogHeader>
+                    {bonus && <AjustementForm membre={bonus} onSuccess={() => setBonus(null)} />}
                 </DialogContent>
             </Dialog>
 

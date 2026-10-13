@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import useSWR from "swr";
-import { Check, CheckCheck, Loader2, MessageCircle, RotateCcw, Search, X } from "lucide-react";
+import { Check, CheckCheck, Hourglass, Loader2, MessageCircle, QrCode, RotateCcw, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,13 +22,30 @@ export function AppelPresence({ seance, onSaved }: { seance: SeanceDetail; onSav
         () => new Map<number, Etat>(seance.participants.map((p) => [p.utilisateur_id, p.present ? "present" : "absent"])),
         [seance.participants],
     );
-    const [etats, setEtats] = useState(initial);
+    // Inscrits (« Je viens ») et pointés par QR code : pré-remplis dans l'appel
+    const inscrits = useMemo(() => new Map(seance.inscrits.map((i) => [i.utilisateur_id, i.statut])), [seance.inscrits]);
+    const pointes = useMemo(() => new Set(seance.pointages.map((p) => p.utilisateur_id)), [seance.pointages]);
+    // État de départ : l'appel enregistré + les pointés QR cochés présents (à valider)
+    const depart = useMemo(() => {
+        const m = new Map(initial);
+        pointes.forEach((id) => {
+            if (!m.has(id)) m.set(id, "present");
+        });
+        return m;
+    }, [initial, pointes]);
+    const aValider = [...pointes].filter((id) => !initial.has(id)).length;
+    const concernes = useMemo(
+        () => new Set([...initial.keys(), ...inscrits.keys(), ...pointes]),
+        [initial, inscrits, pointes],
+    );
+
+    const [etats, setEtats] = useState(depart);
     const [query, setQuery] = useState("");
-    const [filtre, setFiltre] = useState<"inscrits" | "tous">(seance.participants.length ? "inscrits" : "tous");
+    const [filtre, setFiltre] = useState<"inscrits" | "tous">(concernes.size ? "inscrits" : "tous");
     const [saving, setSaving] = useState(false);
     const q = useDebounced(query.trim(), 250);
 
-    useEffect(() => setEtats(initial), [initial]);
+    useEffect(() => setEtats(depart), [depart]);
 
     // Annuaire des membres (recherche côté serveur, 200 max par page)
     const { data, isLoading } = useSWR(["/users", "appel", q], () => UsersApi.list({ q, limit: 200 }));
@@ -36,19 +53,19 @@ export function AppelPresence({ seance, onSaved }: { seance: SeanceDetail; onSav
 
     const membres: Membre[] = useMemo(() => {
         const parId = new Map<number, Membre>();
-        seance.participants.forEach((p) =>
+        [...seance.participants, ...seance.inscrits, ...seance.pointages].forEach((p) =>
             parId.set(p.utilisateur_id, { id: p.utilisateur_id, nom: p.nom, prenom: p.prenom, classe: p.classe, discord_lie: p.discord_lie }),
         );
         annuaire.forEach((u) => parId.set(u.id, { ...parId.get(u.id), ...u, discord_lie: !!u.discord_id }));
         let liste = [...parId.values()];
         // Les inscrits d'origine restent affichés même décochés : un mauvais tap se corrige sur place
-        if (filtre === "inscrits" && !q) liste = liste.filter((m) => etats.has(m.id) || initial.has(m.id));
+        if (filtre === "inscrits" && !q) liste = liste.filter((m) => etats.has(m.id) || concernes.has(m.id));
         if (q) {
             const needle = q.toLowerCase();
             liste = liste.filter((m) => `${m.prenom} ${m.nom} ${m.classe}`.toLowerCase().includes(needle));
         }
         return liste.sort((a, b) => a.prenom.localeCompare(b.prenom, "fr") || a.nom.localeCompare(b.nom, "fr"));
-    }, [seance.participants, annuaire, filtre, q, etats, initial]);
+    }, [seance.participants, seance.inscrits, seance.pointages, annuaire, filtre, q, etats, concernes]);
 
     const presents = [...etats.values()].filter((e) => e === "present").length;
     const dirty =
@@ -111,7 +128,7 @@ export function AppelPresence({ seance, onSaved }: { seance: SeanceDetail; onSav
                                 filtre === f ? "bg-card text-gold shadow-sm" : "text-muted-foreground",
                             )}
                         >
-                            {f === "inscrits" ? `Inscrits (${etats.size})` : "Tous les membres"}
+                            {f === "inscrits" ? `Séance (${new Set([...concernes, ...etats.keys()]).size})` : "Tous les membres"}
                         </button>
                     ))}
                 </div>
@@ -130,7 +147,7 @@ export function AppelPresence({ seance, onSaved }: { seance: SeanceDetail; onSav
                         </Button>
                     )}
                     {dirty && (
-                        <Button variant="ghost" size="icon-sm" onClick={() => setEtats(initial)} aria-label="Annuler les modifications">
+                        <Button variant="ghost" size="icon-sm" onClick={() => setEtats(depart)} aria-label="Revenir à l'état de départ">
                             <RotateCcw />
                         </Button>
                     )}
@@ -164,6 +181,15 @@ export function AppelPresence({ seance, onSaved }: { seance: SeanceDetail; onSav
                                     {m.classe}
                                     {m.discord_lie && <MessageCircle className="size-3" aria-label="Discord lié" />}
                                     {!etat && initial.has(m.id) && <span className="text-destructive">· sera retiré de la séance</span>}
+                                    {pointes.has(m.id) && (
+                                        <span className="text-success inline-flex items-center gap-0.5" title="A pointé avec le QR code">
+                                            <QrCode className="size-3" /> pointé
+                                        </span>
+                                    )}
+                                    {inscrits.get(m.id) === "inscrit" && !pointes.has(m.id) && <span className="text-gold">· inscrit</span>}
+                                    {inscrits.get(m.id) === "attente" && (
+                                        <span className="text-muted-foreground inline-flex items-center gap-0.5"><Hourglass className="size-3" /> attente</span>
+                                    )}
                                 </p>
                             </div>
                             <div className="flex shrink-0 items-center gap-1" role="group" aria-label={`Présence de ${m.prenom} ${m.nom}`}>
@@ -205,7 +231,11 @@ export function AppelPresence({ seance, onSaved }: { seance: SeanceDetail; onSav
                 )}
             >
                 <div className="bg-popover/95 flex items-center justify-between gap-3 rounded-xl border p-2 pl-4 shadow-2xl backdrop-blur">
-                    <span className="text-sm">Modifications non enregistrées</span>
+                    <span className="text-sm">
+                        {aValider > 0 && [...pointes].some((id) => !initial.has(id) && etats.get(id) === "present")
+                            ? `${aValider} pointage${aValider > 1 ? "s" : ""} QR à valider`
+                            : "Modifications non enregistrées"}
+                    </span>
                     <Button onClick={save} disabled={saving}>
                         {saving && <Loader2 className="animate-spin" />} Enregistrer l&apos;appel
                     </Button>

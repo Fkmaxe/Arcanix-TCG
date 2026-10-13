@@ -44,6 +44,11 @@ export interface Seance {
     semestre: Semestre | null;
     nb_participants: number;
     nb_presents: number;
+    places_max: number | null;
+    nb_inscrits: number;
+    nb_attente: number;
+    mon_inscription: "inscrit" | "attente" | null;
+    a_resultats: boolean;
 }
 
 export interface ParticipantDetail {
@@ -58,9 +63,99 @@ export interface ParticipantDetail {
     discord_lie: boolean;
 }
 
+export interface MembreResume {
+    utilisateur_id: number;
+    prenom: string;
+    nom: string;
+    classe: string;
+    discord_lie: boolean;
+}
+
+export interface InscritDetail extends MembreResume {
+    statut: "inscrit" | "attente";
+    cree_le: string;
+}
+
+export interface PointageDetail extends MembreResume {
+    cree_le: string;
+}
+
+export interface Resultat {
+    utilisateur_id: number;
+    prenom: string;
+    nom: string;
+    place: number;
+    victoires: number | null;
+    defaites: number | null;
+    nuls: number | null;
+    deck: string | null;
+    bonus: number;
+    moi: boolean;
+}
+
+export type ResultatInput = Pick<Resultat, "utilisateur_id" | "place" | "victoires" | "defaites" | "nuls" | "deck">;
+
 export interface SeanceDetail extends Seance {
     participants: ParticipantDetail[];
     ma_participation: boolean | null;
+    inscrits: InscritDetail[];
+    pointages: PointageDetail[];
+    mon_pointage: boolean;
+    pointage_ouvert: boolean;
+    resultats: Resultat[];
+}
+
+export interface PointageInfo {
+    ouvert: boolean;
+    expire_le: string | null;
+    code: string | null;
+    url: string | null;
+    secondes_restantes: number;
+    periode_s: number;
+    pointages: PointageDetail[];
+}
+
+export type Categorie = "organisation" | "tournoi" | "penalite" | "autre";
+
+export interface Ajustement {
+    id: number;
+    utilisateur_id: number;
+    prenom: string;
+    nom: string;
+    semestre: Semestre;
+    seance_id: number | null;
+    points: number;
+    categorie: Categorie;
+    motif: string;
+    cree_par: string | null;
+    cree_le: string;
+}
+
+export interface MonAjustement {
+    id: number;
+    points: number;
+    categorie: Categorie;
+    motif: string;
+    semestre_id: number;
+    seance_id: number | null;
+    cree_le: string;
+}
+
+export interface EntreeJournal {
+    id: number;
+    cree_le: string;
+    auteur_id: number | null;
+    auteur_nom: string;
+    action: string;
+    resume: string;
+    membre_id: number | null;
+    seance_id: number | null;
+    details: Record<string, unknown> | null;
+}
+
+export interface ConfigPublique {
+    smtp: boolean;
+    qr_periode_s: number;
 }
 
 export type SeanceInput = {
@@ -72,6 +167,7 @@ export type SeanceInput = {
     description: string | null;
     nb_point: number;
     semestre_id: number;
+    places_max: number | null;
 };
 
 export interface MaParticipation {
@@ -99,7 +195,7 @@ export interface MesStats {
     seances_semestre: number;
     presences: number;
     taux_presence: number;
-    evolution: { date: string; seance: string; points: number; cumul: number }[];
+    evolution: { date: string; seance: string; points: number; cumul: number; type: "presence" | "ajustement" }[];
 }
 
 export interface LigneClassement {
@@ -110,6 +206,7 @@ export interface LigneClassement {
     classe: string;
     points: number;
     presences: number;
+    bonus: number;
     moi: boolean;
 }
 
@@ -126,4 +223,5 @@ export interface StatPoints {
     classe: string;
     points: number;
     presences: number;
+    bonus: number;
 }

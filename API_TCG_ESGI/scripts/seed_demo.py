@@ -7,7 +7,7 @@ import random
 from datetime import date, time, timedelta
 
 from app.database import SessionLocal
-from app.models import Participation, Seance, Semestre, Utilisateur
+from app.models import Ajustement, Inscription, Participation, Resultat, Seance, Semestre, Utilisateur
 from app.security import hash_password
 
 PRENOMS = ["Léa", "Hugo", "Chloé", "Lucas", "Inès", "Nathan", "Manon", "Théo", "Camille", "Enzo",
@@ -60,8 +60,32 @@ def main() -> None:
             continue
         for u in random.sample(tous, k=random.randint(6, 14)):
             db.add(Participation(utilisateur_id=u.id, seance_id=s.id, present=random.random() > 0.12))
+    # Inscriptions aux séances à venir (la première est presque complète)
+    a_venir = [s for s in seances if s.date_seance >= today]
+    a_venir[0].places_max = 12
+    if len(a_venir) > 1:
+        a_venir[1].places_max = 16
+    for s, n in zip(a_venir, (11, 6, 3)):
+        for u in random.sample(membres, k=n):
+            db.add(Inscription(utilisateur_id=u.id, seance_id=s.id, statut="inscrit"))
+
+    # Résultats du dernier tournoi passé + bonus de podium
+    tournoi = next(s for s in reversed(seances) if s.date_seance < today and s.nom.startswith("Tournoi"))
+    db.flush()
+    presents = [p.utilisateur_id for p in db.query(Participation).filter_by(seance_id=tournoi.id, present=True)]
+    for place, uid in enumerate(presents[:6], start=1):
+        db.add(Resultat(seance_id=tournoi.id, utilisateur_id=uid, place=place, victoires=max(0, 5 - place), defaites=place - 1,
+                        deck=random.choice(["Dracaufeu ex", "Gardevoir ex", "Lugia VSTAR", None])))
+        bonus = {1: 3, 2: 2, 3: 1}.get(place)
+        if bonus:
+            db.add(Ajustement(utilisateur_id=uid, semestre_id=s2.id, seance_id=tournoi.id, points=bonus, categorie="tournoi",
+                              motif=f"Tournoi « {tournoi.nom} » : {'1re' if place == 1 else f'{place}e'} place", cree_par_id=staff[0].id))
+    db.add(Ajustement(utilisateur_id=membres[0].id, semestre_id=s2.id, points=2, categorie="organisation",
+                      motif="Aide à l'installation du tournoi", cree_par_id=staff[1].id))
+    db.add(Ajustement(utilisateur_id=membres[1].id, semestre_id=s2.id, points=-1, categorie="penalite",
+                      motif="Absence non excusée à un tournoi inscrit", cree_par_id=staff[1].id))
     db.commit()
-    print(f"✅ {len(tous)} membres, 2 semestres, {len(seances)} séances")
+    print(f"✅ {len(tous)} membres, 2 semestres, {len(seances)} séances, inscriptions, résultats et bonus")
 
 
 if __name__ == "__main__":

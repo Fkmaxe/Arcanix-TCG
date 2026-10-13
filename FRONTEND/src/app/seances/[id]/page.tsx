@@ -4,13 +4,15 @@ import Link from "next/link";
 import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
-import { ArrowLeft, CalendarDays, CheckCircle2, Clock, Flame, MapPin, Pencil, Trash2, Users, XCircle } from "lucide-react";
+import { ArrowLeft, CalendarDays, CheckCircle2, Clock, Flame, Hourglass, MapPin, Pencil, QrCode, Trash2, Users, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { OrnateCard } from "@/components/brand/OrnateCard";
 import { ConfirmButton } from "@/components/common/ConfirmButton";
 import { SectionTitle } from "@/components/common/PageHeader";
 import { ErrorBox, FullPageLoader } from "@/components/common/States";
 import { AppelPresence } from "@/components/seances/AppelPresence";
+import { InscriptionBloc } from "@/components/seances/InscriptionBloc";
+import { ResultatsTournoi } from "@/components/seances/ResultatsTournoi";
 import { JeuBadge } from "@/components/seances/JeuBadge";
 import SeanceForm from "@/components/seances/SeanceForm";
 import { Button } from "@/components/ui/button";
@@ -76,6 +78,12 @@ export default function SeanceDetailPage({ params }: { params: Promise<{ id: str
                 </div>
                 {seance.description && <p className="mt-5 text-sm leading-relaxed whitespace-pre-line">{seance.description}</p>}
 
+                {me && seance.ma_participation === null && seance.mon_pointage && (
+                    <div className="border-gold/30 bg-gold/10 text-gold mt-5 flex items-center gap-2 rounded-lg border p-3 text-sm">
+                        <Hourglass className="size-4" /> Tu as pointé avec le QR code : ta présence attend la validation de la modération.
+                    </div>
+                )}
+
                 {me && seance.ma_participation !== null && (
                     <div className={`mt-5 flex items-center gap-2 rounded-lg border p-3 text-sm ${seance.ma_participation ? "border-success/30 bg-success/10 text-success" : "border-destructive/30 bg-destructive/10 text-destructive"}`}>
                         {seance.ma_participation ? <><CheckCircle2 className="size-4" /> Ta présence est validée : +{formatPoints(seance.nb_point)} pts</> : <><XCircle className="size-4" /> Tu étais inscrit·e mais noté·e absent·e</>}
@@ -84,6 +92,9 @@ export default function SeanceDetailPage({ params }: { params: Promise<{ id: str
 
                 {staff && (
                     <div className="mt-5 flex flex-wrap gap-2 border-t pt-4">
+                        <Button asChild size="sm">
+                            <Link href={`/seances/${seance.id}/qr`}><QrCode /> Pointage QR{seance.pointage_ouvert ? " (ouvert)" : ""}</Link>
+                        </Button>
                         <Button variant="outline" size="sm" onClick={() => setEdit(true)}><Pencil /> Modifier</Button>
                         <ConfirmButton
                             title={`Supprimer « ${seance.nom} » ?`}
@@ -105,8 +116,12 @@ export default function SeanceDetailPage({ params }: { params: Promise<{ id: str
                 )}
             </OrnateCard>
 
+            <InscriptionBloc seance={seance} onChange={() => mutate()} />
+
+            <ResultatsTournoi seance={seance} onSaved={() => mutate()} />
+
             {staff && (
-                <section>
+                <section id="appel" className="scroll-mt-24">
                     <SectionTitle>Appel des présences</SectionTitle>
                     <AppelPresence seance={seance} onSaved={(s) => mutate(s, { revalidate: false })} />
                 </section>

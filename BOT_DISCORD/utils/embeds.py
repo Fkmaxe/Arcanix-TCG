@@ -93,6 +93,30 @@ def seance_embed(s: dict, titre: str, color: int = BRAISE) -> discord.Embed:
     if s.get("jeu"):
         e.add_field(name="🃏 Jeu", value=JEUX.get(s["jeu"], s["jeu"]), inline=True)
     e.add_field(name="🔥 Points", value=f"+{pts(s['nb_point'])}", inline=True)
+    e.add_field(name=CHAMP_INSCRITS, value=texte_inscrits(s), inline=True)
+    return e
+
+
+CHAMP_INSCRITS = "👥 Inscrits"
+
+
+def texte_inscrits(s: dict) -> str:
+    n, places, attente = s.get("nb_inscrits", 0), s.get("places_max"), s.get("nb_attente", 0)
+    txt = f"{n}/{places}" if places else str(n)
+    if places and n >= places:
+        txt += " · complet"
+    if attente:
+        txt += f" · {attente} en attente"
+    return txt
+
+
+def maj_inscrits(e: discord.Embed, s: dict) -> discord.Embed:
+    """Met à jour le compteur d'inscrits d'une annonce existante."""
+    for i, f in enumerate(e.fields):
+        if f.name == CHAMP_INSCRITS:
+            e.set_field_at(i, name=CHAMP_INSCRITS, value=texte_inscrits(s), inline=True)
+            return e
+    e.add_field(name=CHAMP_INSCRITS, value=texte_inscrits(s), inline=True)
     return e
 
 

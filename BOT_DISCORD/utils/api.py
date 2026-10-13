@@ -107,6 +107,19 @@ class ApiClient:
             "auteur_discord_id": str(auteur_id), "discord_ids": [str(i) for i in discord_ids],
         })
 
+    async def inscription_seance(self, seance_id: int, discord_id: int, action: str) -> dict:
+        return await self.request("POST", f"/discord/seances/{seance_id}/inscription",
+                                  json={"discord_id": str(discord_id), "action": action})
+
+    async def ajustement(self, auteur_id: int, discord_id: int, points: float, motif: str, categorie: str) -> dict:
+        return await self.request("POST", "/discord/ajustements", json={
+            "auteur_discord_id": str(auteur_id), "discord_id": str(discord_id), "points": points,
+            "motif": motif, "categorie": categorie,
+        })
+
+    async def roles(self) -> dict:
+        return await self.request("GET", "/discord/roles")
+
     # --- Annonces -----------------------------------------------------------------
     async def annonces_en_attente(self) -> list[dict]:
         return await self.request("GET", "/discord/annonces/en-attente")

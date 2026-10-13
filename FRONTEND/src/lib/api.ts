@@ -1,8 +1,9 @@
 // src/lib/api.ts — appels typés vers l'API Arcanix
 import { download, fetcher, fetchPage } from "./swr";
 import type {
-    Classement, MaParticipation, Me, MesStats, MyPoints, ParticipantDetail, Seance, SeanceDetail, SeanceInput,
-    Semestre, StatPoints, User,
+    Ajustement, Categorie, Classement, ConfigPublique, EntreeJournal, MaParticipation, Me, MesStats, MonAjustement,
+    MyPoints, ParticipantDetail, PointageInfo, Resultat, ResultatInput, Seance, SeanceDetail, SeanceInput, Semestre,
+    StatPoints, User,
 } from "./types";
 
 const json = (method: string, body?: unknown): RequestInit => ({
@@ -26,6 +27,8 @@ export const AuthApi = {
         fetcher<{ access_token: string }>("/auth/definir-mot-de-passe", json("POST", { jeton, mot_de_passe })),
     register: (body: { nom: string; prenom: string; adresse_mail: string; classe: string; password: string }) =>
         fetcher<User>("/users", json("POST", body)),
+    motDePasseOublie: (email: string) => fetcher<{ message: string }>("/auth/mot-de-passe-oublie", json("POST", { email })),
+    config: () => fetcher<ConfigPublique>("/config"),
 };
 
 export const MeApi = {
@@ -36,22 +39,25 @@ export const MeApi = {
     points: () => fetcher<MyPoints>("/me/points"),
     stats: (semestreId?: number) => fetcher<MesStats>(`/me/stats${qs({ semestreId })}`),
     codeDiscord: () => fetcher<{ code: string; expire_dans_minutes: number }>("/me/code-discord", json("POST")),
+    ajustements: (semestreId?: number) => fetcher<MonAjustement[]>(`/me/ajustements${qs({ semestreId })}`),
     delierDiscord: () => fetcher<null>("/me/discord", json("DELETE")),
 };
 
 export type UsersQuery = { q?: string; role?: string; classe?: string; page?: number; limit?: number };
 export const UsersApi = {
     list: (params: UsersQuery = {}) => fetchPage<User>(`/users${qs(params)}`),
+    get: (id: number) => fetcher<User>(`/users/${id}`),
     classes: () => fetcher<string[]>("/users/classes"),
-    create: (body: Omit<User, "id" | "discord_id" | "doit_changer_mdp"> & { password: string }) =>
+    create: (body: Omit<User, "id" | "discord_id" | "doit_changer_mdp"> & { password?: string; envoyer_invitation?: boolean }) =>
         fetcher<User>("/users", json("POST", body)),
     update: (id: number, body: Partial<Omit<User, "id" | "discord_id" | "doit_changer_mdp">>) =>
         fetcher<User>(`/users/${id}`, json("PATCH", body)),
     remove: (id: number) => fetcher<null>(`/users/${id}`, json("DELETE")),
     setPassword: (id: number, new_password: string) =>
         fetcher<null>(`/users/${id}/password`, json("PATCH", { new_password })),
-    lienMotDePasse: (id: number) =>
-        fetcher<{ url: string; expire_dans_heures: number }>(`/users/${id}/lien-mot-de-passe`, json("POST")),
+    lienMotDePasse: (id: number, envoyer = false) =>
+        fetcher<{ url: string; expire_dans_heures: number; email_envoye: boolean }>(
+            `/users/${id}/lien-mot-de-passe${envoyer ? "?envoyer=true" : ""}`, json("POST")),
 };
 
 export const SemestresApi = {
@@ -78,6 +84,30 @@ export const SeancesApi = {
     retirer: (id: number, uid: number) => fetcher<null>(`/seances/${id}/participants/${uid}`, json("DELETE")),
     patchParticipant: (id: number, uid: number, b: Partial<Pick<ParticipantDetail, "present" | "commentaire">>) =>
         fetcher(`/seances/${id}/participants/${uid}`, json("PATCH", b)),
+    inscrire: (id: number) => fetcher<{ statut: "inscrit" | "attente" | null; seance: Seance }>(`/seances/${id}/inscription`, json("POST")),
+    desinscrire: (id: number) => fetcher<{ statut: null; seance: Seance }>(`/seances/${id}/inscription`, json("DELETE")),
+    retirerInscription: (id: number, uid: number) => fetcher<null>(`/seances/${id}/inscriptions/${uid}`, json("DELETE")),
+    pointage: (id: number) => fetcher<PointageInfo>(`/seances/${id}/pointage`),
+    ouvrirPointage: (id: number, duree_heures = 4) => fetcher<PointageInfo>(`/seances/${id}/pointage/ouvrir`, json("POST", { duree_heures })),
+    fermerPointage: (id: number) => fetcher<PointageInfo>(`/seances/${id}/pointage/fermer`, json("POST")),
+    pointer: (id: number, code: string) =>
+        fetcher<{ resultat: "pointe" | "deja_pointe" | "deja_valide"; seance: Seance }>(`/seances/${id}/pointer`, json("POST", { code })),
+    resultats: (id: number) => fetcher<Resultat[]>(`/seances/${id}/resultats`),
+    enregistrerResultats: (id: number, resultats: ResultatInput[], bareme: number[], annoncer: boolean) =>
+        fetcher<Resultat[]>(`/seances/${id}/resultats`, json("PUT", { resultats, bareme, annoncer })),
+};
+
+export type AjustementsQuery = { semestreId?: number; userId?: number; categorie?: string; page?: number; limit?: number };
+export const AjustementsApi = {
+    list: (params: AjustementsQuery = {}) => fetchPage<Ajustement>(`/ajustements${qs(params)}`),
+    create: (b: { utilisateur_id: number; points: number; motif: string; categorie: Categorie; semestre_id?: number }) =>
+        fetcher<Ajustement>("/ajustements", json("POST", b)),
+    remove: (id: number) => fetcher<null>(`/ajustements/${id}`, json("DELETE")),
+};
+
+export type JournalQuery = { membreId?: number; seanceId?: number; action?: string; page?: number; limit?: number };
+export const JournalApi = {
+    list: (params: JournalQuery = {}) => fetchPage<EntreeJournal>(`/journal${qs(params)}`),
 };
 
 export const StatsApi = {

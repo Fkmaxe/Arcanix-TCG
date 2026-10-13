@@ -18,7 +18,9 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     const pathname = usePathname();
 
     useEffect(() => {
-        if (ready && !token) router.replace(`/login?next=${encodeURIComponent(pathname || "/dashboard")}`);
+        // On garde aussi les paramètres (ex. code du QR) pour revenir au bon endroit après connexion
+        const cible = typeof window !== "undefined" ? window.location.pathname + window.location.search : pathname;
+        if (ready && !token) router.replace(`/login?next=${encodeURIComponent(cible || "/dashboard")}`);
     }, [ready, token, router, pathname]);
 
     if (!ready || isLoading || (token && !me)) return <FullPageLoader label="Vérification de la session…" />;

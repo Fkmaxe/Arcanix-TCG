@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import useSWR from "swr";
-import { CalendarRange, ChevronRight, Download, Swords, Users } from "lucide-react";
+import { CalendarRange, ChevronRight, Download, History, Sparkles, Swords, Users } from "lucide-react";
 import { PageHeader } from "@/components/common/PageHeader";
 import { StatTile } from "@/components/common/States";
 import { SeancesApi, StatsApi, UsersApi } from "@/lib/api";
@@ -21,6 +21,8 @@ export default function GestionPage() {
     const tuiles = [
         { href: "/gestion/seances", icon: Swords, titre: "Séances", texte: "Créer, modifier, faire l'appel." },
         { href: "/gestion/membres", icon: Users, titre: "Membres", texte: "Comptes, rôles, mots de passe." },
+        { href: "/gestion/points", icon: Sparkles, titre: "Bonus & malus", texte: "Points hors séance, avec motif." },
+        { href: "/gestion/journal", icon: History, titre: "Journal", texte: "Qui a fait quoi, et quand." },
         ...(admin ? [{ href: "/gestion/semestres", icon: CalendarRange, titre: "Semestres", texte: "Semestre en cours, clôture et podium." }] : []),
         { href: "/gestion/exports", icon: Download, titre: "Exports", texte: "Points et présences en CSV / JSON." },
     ];

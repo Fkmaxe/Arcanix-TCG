@@ -34,6 +34,15 @@ services:
       DISCORD_BOT_TOKEN: ${DISCORD_BOT_TOKEN:?définir DISCORD_BOT_TOKEN dans .env}
       DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL:-}
       DEBUG: ${DEBUG:-false}
+      # Emails (laisser SMTP_HOST vide pour désactiver)
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-Arcanix <no-reply@arcanix.local>}
+      SMTP_SECURITE: ${SMTP_SECURITE:-starttls}
+      # IP du Nginx externe : l'API lit alors la vraie IP des visiteurs (X-Forwarded-For)
+      FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
     ports:
       - "8000:8000"
 
@@ -64,6 +73,9 @@ services:
       DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
       DISCORD_ANNONCES_CHANNEL_ID: ${DISCORD_ANNONCES_CHANNEL_ID:-}
       DISCORD_ANNONCES_ROLE_ID: ${DISCORD_ANNONCES_ROLE_ID:-}
+      DISCORD_ROLE_MEMBRE_ID: ${DISCORD_ROLE_MEMBRE_ID:-}
+      DISCORD_ROLE_TOP3_ID: ${DISCORD_ROLE_TOP3_ID:-}
+      DISCORD_SYNC_ROLES: ${DISCORD_SYNC_ROLES:-false}
 
 volumes:
   postgres_data:

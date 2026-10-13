@@ -59,7 +59,10 @@ export default function LoginForm() {
                         <Input id="email" type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="username" autoFocus />
                     </div>
                     <div className="space-y-1.5">
-                        <Label htmlFor="password">Mot de passe</Label>
+                        <div className="flex items-center justify-between">
+                            <Label htmlFor="password">Mot de passe</Label>
+                            <Link href="/mot-de-passe-oublie" className="text-gold text-xs hover:underline">Mot de passe oublié ?</Link>
+                        </div>
                         <PasswordInput id="password" value={password} onChange={(e) => setPassword(e.target.value)} required autoComplete="current-password" />
                     </div>
                     {err && <p className="text-destructive text-sm" role="alert">{err}</p>}
@@ -71,9 +74,7 @@ export default function LoginForm() {
                     <p>
                         Pas encore de compte ? <Link href="/register" className="text-gold font-medium hover:underline">Créer un compte</Link>
                     </p>
-                    <p className="text-xs">
-                        Mot de passe oublié ? Sur le Discord, tape <code className="text-gold">/reinitialiser</code> ou demande à la modération.
-                    </p>
+
                 </div>
             </OrnateCard>
         </div>

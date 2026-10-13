@@ -4,6 +4,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from utils import embeds
+from utils.roles import donner_role_membre
 from utils.api import ApiError
 
 
@@ -33,6 +34,7 @@ class InscriptionModal(discord.ui.Modal, title="Rejoindre Arcanix"):
             "à usage unique — ne le partage pas).",
         )
         e.add_field(name="Ensuite", value="`/points` · `/seances` · `/classement`", inline=False)
+        await donner_role_membre(interaction.user, interaction.guild)
         view = embeds.bouton_lien("Définir mon mot de passe", r["url"], "🔑")
         if view is None:
             e.add_field(name="Lien", value=r["url"], inline=False)
@@ -55,6 +57,7 @@ class Compte(commands.Cog):
             m = await self.bot.api.lier(interaction.user.id, code.strip())
         except ApiError as e:
             return await interaction.followup.send(embed=embeds.erreur(e.message), ephemeral=True)
+        await donner_role_membre(interaction.user, interaction.guild)
         await interaction.followup.send(
             embed=embeds.succes(f"Compte lié : bienvenue **{m['prenom']} {m['nom']}** ! Tu as {embeds.pts(m['points'])} pts ce semestre."),
             ephemeral=True,

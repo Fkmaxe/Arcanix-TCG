@@ -8,10 +8,28 @@ import config
 from utils import embeds
 from utils.api import ApiError
 
+from .inscriptions import vue_inscription
+
 log = logging.getLogger("arcanix.annonces")
 
 
 def construire(a: dict) -> tuple[discord.Embed, discord.ui.View | None]:
+    if a["type"] == "resultats":
+        s = a["seance"]
+        lignes = []
+        for r in a["resultats"]:
+            bilan = "-".join(str(x) for x in (r.get("victoires"), r.get("defaites"), r.get("nuls")) if x is not None)
+            ligne = f"{embeds.rang(r['place'])} **{r['prenom']} {r['nom']}**"
+            if bilan:
+                ligne += f" · {bilan}"
+            if r.get("deck"):
+                ligne += f" · _{r['deck']}_"
+            if r.get("bonus"):
+                ligne += f" · +{embeds.pts(r['bonus'])} pts"
+            lignes.append(ligne)
+        e = embeds.embed(f"⚔️ Résultats · {s['nom']}", "\n".join(lignes) or "Aucun résultat.", embeds.OR)
+        e.set_footer(text=f"{embeds.date_longue(s['date_seance']).capitalize()} · Arcanix")
+        return e, embeds.bouton_lien("Classement complet", embeds.site_url(f"/seances/{s['id']}"), "📜")
     if a["type"] == "podium":
         sem = a["semestre"]
         lignes = [f"{embeds.rang(l['rang'])} **{l['prenom']} {l['nom']}** — {embeds.pts(l['points'])} pts" for l in a["podium"]]
@@ -27,7 +45,7 @@ def construire(a: dict) -> tuple[discord.Embed, discord.ui.View | None]:
         e = embeds.seance_embed(s, f"⏰ C'est demain : {s['nom']}", embeds.OR)
     else:
         e = embeds.seance_embed(s, f"🔥 Nouvelle séance : {s['nom']}", embeds.BRAISE)
-    return e, embeds.bouton_lien("Détails", embeds.site_url(f"/seances/{s['id']}"), "🌐")
+    return e, vue_inscription(s)
 
 
 class Annonces(commands.Cog):

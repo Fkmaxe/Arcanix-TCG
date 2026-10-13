@@ -22,6 +22,39 @@ docker compose up -d --build
 - Données de démonstration (base **vide** uniquement) : `docker compose exec api python -m scripts.seed_demo`
   → comptes `admin@arcanix.fr`, `modo@arcanix.fr`, `membre@arcanix.fr` (mot de passe `arcanix123`)
 
+## Fonctionnalités
+
+- **Séances** : liste et calendrier, filtres par jeu, détail, places limitées.
+- **« Je viens »** : inscription sur le site ou par bouton sous l'annonce Discord ; liste d'attente avec
+  promotion automatique (email + message privé Discord) quand une place se libère.
+- **Pointage par QR code** : la modération affiche un QR (page *Pointage QR* d'une séance, plein écran possible) qui
+  change toutes les 30 s ; les membres le scannent avec leur téléphone. Le pointage est **en attente** : les pointés
+  arrivent pré-cochés dans l'appel et les points ne comptent qu'une fois l'appel validé.
+- **Appel rapide** : inscrits et pointés pré-remplis, « Tous présents », enregistrement en une fois.
+- **Bonus / malus** : points hors séance avec motif obligatoire (organisation, pénalité…), visibles par le membre.
+- **Résultats de tournoi** : place, bilan V-D-N, deck ; un barème (3/2/1 par défaut) attribue les bonus de podium,
+  recalculés à chaque correction ; annonce automatique sur Discord.
+- **Journal** : chaque présence, point, rôle, séance… avec son auteur et l'heure (*Gestion → Journal*, ou
+  *Historique* depuis la fiche d'un membre).
+- **Classement**, profil (graphique, historique), exports CSV/JSON (avec la colonne bonus/malus).
+
+## Emails (SMTP)
+
+Renseigner `SMTP_*` dans `.env` (fournisseur SMTP, Brevo, OVH, Gmail avec mot de passe d'application…).
+Activent : *Mot de passe oublié*, invitation par email à la création d'un compte par la modération,
+envoi du lien de mot de passe depuis la fiche d'un membre, alerte « une place s'est libérée ».
+Sans SMTP, tout continue de fonctionner (liens via Discord `/reinitialiser` ou copiés par la modération).
+En développement, `docker-compose.dev.yml` démarre **Mailpit** : les emails sont visibles sur http://localhost:8025.
+
+## Déploiement derrière Nginx (serveur séparé)
+
+Voir [docs/nginx-arcanix.conf](docs/nginx-arcanix.conf). Points à ne pas oublier :
+- `NEXT_PUBLIC_API_BASE` = URL publique de l'API (le navigateur l'appelle directement), `FRONTEND_URL` et
+  `CORS_ORIGINS` = URL publique du site ;
+- `FORWARDED_ALLOW_IPS` = IP du serveur Nginx, sinon la limitation des tentatives de connexion verra
+  l'IP de Nginx pour tout le monde ;
+- n'exposer les ports 3000/8000 du serveur Docker qu'au serveur Nginx (pare-feu).
+
 ## Base de données et migrations
 
 Le schéma est géré par **Alembic** ; l'API applique les migrations à chaque démarrage (`app/migrate.py`).
@@ -72,13 +105,23 @@ Si deux comptes ont le même email à la casse près, la migration s'arrête et 
 | `/seances` | Prochaines séances |
 | `/mod seance [jeu]` | Créer une séance (formulaire) |
 | `/mod presence seance` | Valider jusqu'à 25 présents d'un coup (sélecteur de membres) |
+| `/mod points membre points motif` | Bonus (ou malus si négatif) avec motif |
+| Boutons sous les annonces | « Je viens » / « Je ne viens plus » (fonctionnent même après un redémarrage du bot) |
 
 Les commandes `/mod` sont masquées par défaut aux membres sans la permission « Gérer les événements » ;
 on peut les ouvrir à un rôle dans *Paramètres du serveur → Intégrations → Arcanix*. Dans tous les cas,
 l'API vérifie que l'auteur est `moderator` ou `admin` sur le site (compte lié).
 
-**Annonces automatiques** (toutes les 5 min) : nouvelle séance, rappel la veille, et podium du semestre
-quand un admin définit un nouveau « semestre en cours ».
+**Annonces automatiques** (toutes les 5 min) : nouvelle séance et rappel la veille (avec boutons d'inscription),
+résultats de tournoi, et podium du semestre quand un admin définit un nouveau « semestre en cours ».
+
+**Rôles automatiques** (optionnels) :
+- `DISCORD_ROLE_MEMBRE_ID` : donné dès `/register` ou `/lier` ;
+- `DISCORD_ROLE_TOP3_ID` : attribué aux 3 premiers du semestre en cours et retiré aux autres (toutes les 15 min).
+
+Le bot a besoin de la permission **Gérer les rôles**, et son rôle doit être **au-dessus** de ces rôles dans la
+liste des rôles du serveur. La synchronisation périodique (top 3) nécessite d'activer l'intent privilégié
+**Server Members** : *Developer Portal → ton application → Bot → Privileged Gateway Intents*.
 
 ## Tests
 

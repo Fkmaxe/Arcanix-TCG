@@ -90,13 +90,27 @@ class FakeFollowup:
         self.inter.envois.append(Envoi("suivi", content, embed, view, ephemeral))
 
 
+class FakeMessage:
+    """Message d'annonce sur lequel on clique (pour les boutons)."""
+    def __init__(self, embed=None):
+        self.embeds = [embed] if embed else []
+        self.editions = []
+
+    async def edit(self, *, embed=None, **_):
+        self.editions.append(embed)
+        self.embeds = [embed]
+
+
 class FakeInteraction:
-    def __init__(self, user: FakeUser | None = None):
+    def __init__(self, user: FakeUser | None = None, client=None, message: FakeMessage | None = None, guild=None):
         self.user = user or FakeUser()
         self.envois: list[Envoi] = []
         self.response = FakeResponse(self)
         self.followup = FakeFollowup(self)
         self.command = SimpleNamespace(name="test")
+        self.client = client
+        self.message = message
+        self.guild = guild
 
     async def edit_original_response(self, *, embed=None, view=None, content=None):
         self.envois.append(Envoi("edition", content, embed, view))
@@ -144,9 +158,20 @@ class FakeApi:
 class FakeBot:
     api: Any
     channel: FakeChannel = field(default_factory=FakeChannel)
+    mp: dict = field(default_factory=dict)  # messages privés envoyés : {user_id: [embed]}
 
     def get_channel(self, _id):
         return self.channel
+
+    async def fetch_user(self, uid: int):
+        bot = self
+
+        class _U:
+            id = uid
+
+            async def send(self, embed=None, **_):
+                bot.mp.setdefault(uid, []).append(embed)
+        return _U()
 
     async def wait_until_ready(self):
         return None

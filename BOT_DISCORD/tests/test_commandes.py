@@ -5,7 +5,7 @@ from cogs.annonces import Annonces
 from cogs.compte import Compte, InscriptionModal
 from cogs.membres import Membres
 from cogs.moderation import Moderation, PresenceView, SeanceModal
-from tests.fakes import FakeApi, FakeBot, FakeInteraction, FakeUser, remplir, run_async
+from tests.fakes import FakeApi, FakeBot, FakeInteraction, FakeMessage, FakeUser, remplir, run_async
 from utils.api import ApiError
 
 SEMESTRE = {"id": 2, "annee": 2026, "numero": 1, "actif": True}
@@ -253,3 +253,148 @@ async def test_boucle_sans_annonce_ni_api():
     api.reponses["annonces_en_attente"] = ApiError(0, "injoignable")
     await Annonces(bot).boucle.coro(Annonces(bot))  # ne lève pas
     assert not bot.channel.messages
+
+
+# --- Boutons « Je viens » ------------------------------------------------------------------------
+from cogs.annonces import construire  # noqa: E402
+from cogs.inscriptions import BoutonInscription  # noqa: E402
+from cogs.roles import synchroniser  # noqa: E402
+from utils import embeds as emb  # noqa: E402
+
+
+@run_async
+async def test_bouton_je_viens_met_a_jour_l_annonce():
+    seance = {**SEANCE, "places_max": 2, "nb_inscrits": 1}
+    api = FakeApi(inscription_seance={"statut": "inscrit", "seance": {**seance, "nb_inscrits": 2}, "promus": []})
+    bot = FakeBot(api)
+    annonce = FakeMessage(emb.seance_embed(seance, "🔥 Nouvelle séance"))
+    assert {f.name: f.value for f in annonce.embeds[0].fields}["👥 Inscrits"] == "1/2"
+
+    inter = FakeInteraction(FakeUser(id=7), client=bot, message=annonce)
+    await BoutonInscription("in", 9).callback(inter)
+    assert api.appels_de("inscription_seance")[0][0] == (9, 7, "in")
+    assert "inscrit·e" in inter.dernier.texte and inter.dernier.ephemeral
+    assert {f.name: f.value for f in annonce.embeds[0].fields}["👥 Inscrits"] == "2/2 · complet"
+
+
+@run_async
+async def test_bouton_liste_d_attente_puis_promotion_en_mp():
+    api = FakeApi(inscription_seance={"statut": "attente", "seance": {**SEANCE, "places_max": 1, "nb_inscrits": 1, "nb_attente": 1}, "promus": []})
+    bot = FakeBot(api)
+    inter = FakeInteraction(client=bot, message=FakeMessage(emb.seance_embed(SEANCE, "x")))
+    await BoutonInscription("in", 9).callback(inter)
+    assert "Liste d'attente" in inter.dernier.texte
+
+    api.reponses["inscription_seance"] = {"statut": None, "seance": {**SEANCE, "places_max": 1, "nb_inscrits": 1}, "promus": ["55"]}
+    inter = FakeInteraction(client=bot, message=FakeMessage(emb.seance_embed(SEANCE, "x")))
+    await BoutonInscription("out", 9).callback(inter)
+    assert "Désinscription" in inter.dernier.texte
+    assert "place s'est libérée" in bot.mp[55][0].title
+
+
+@run_async
+async def test_bouton_sans_compte_lie():
+    bot = FakeBot(FakeApi(inscription_seance=NON_LIE))
+    inter = FakeInteraction(client=bot, message=FakeMessage())
+    await BoutonInscription("in", 9).callback(inter)
+    assert "/register" in inter.dernier.texte
+
+
+@run_async
+async def test_bouton_reconstruit_depuis_custom_id():
+    import re
+    m = re.fullmatch(BoutonInscription.__discord_ui_compiled_template__, "arcanix:inscr:out:42")
+    b = await BoutonInscription.from_custom_id(None, None, m)
+    assert (b.action, b.seance_id) == ("out", 42)
+
+
+# --- /mod points --------------------------------------------------------------------------------
+@run_async
+async def test_mod_points_bonus_et_malus():
+    api = FakeApi(ajustement={"points": -1.5, "prenom": "Jules", "nom": "F.", "motif": "Retard"})
+    cog, inter = Moderation(FakeBot(api)), FakeInteraction()
+    cible = FakeUser(id=7)
+    cible.mention = "<@7>"
+    await cog.points.callback(cog, inter, membre=cible, points=-1.5, motif=" Retard ", categorie=None)
+    assert api.appels_de("ajustement")[0][0] == (100, 7, -1.5, "Retard", "autre")
+    assert "-1,5 pts" in inter.dernier.texte
+    inter = FakeInteraction()
+    await cog.points.callback(cog, inter, membre=cible, points=0, motif="rien", categorie=None)
+    assert "différents de 0" in inter.dernier.texte
+
+
+# --- Annonce des résultats --------------------------------------------------------------------------
+def test_annonce_resultats():
+    import asyncio
+
+    async def _run():
+        return construire({"type": "resultats", "id": 9, "seance": SEANCE, "resultats": [
+            {"place": 1, "prenom": "Zoé", "nom": "G.", "victoires": 4, "defaites": 0, "nuls": 1, "deck": "Dracaufeu", "bonus": 3},
+            {"place": 2, "prenom": "Enzo", "nom": "M.", "bonus": 0},
+        ]})
+    e, view = asyncio.run(_run())
+    assert e.title == "⚔️ Résultats · Draft Magic"
+    assert "🥇 **Zoé G.** · 4-0-1 · _Dracaufeu_ · +3 pts" in e.description
+    assert "🥈 **Enzo M.**" in e.description
+
+
+# --- Rôles --------------------------------------------------------------------------------------------
+class _Role:
+    def __init__(self, rid):
+        self.id, self.members = rid, []
+
+
+class _Member:
+    def __init__(self, uid):
+        self.id, self.roles = uid, []
+
+    async def add_roles(self, role, reason=None):
+        self.roles.append(role)
+        role.members.append(self)
+
+    async def remove_roles(self, role, reason=None):
+        self.roles.remove(role)
+        role.members.remove(self)
+
+
+class _Guild:
+    def __init__(self, membres, roles):
+        self._m = {m.id: m for m in membres}
+        self._r = {r.id: r for r in roles}
+
+    def get_member(self, uid):
+        return self._m.get(uid)
+
+    def get_role(self, rid):
+        return self._r.get(rid)
+
+
+@run_async
+async def test_synchronisation_des_roles(monkeypatch):
+    import config
+    monkeypatch.setattr(config, "ROLE_MEMBRE_ID", 1)
+    monkeypatch.setattr(config, "ROLE_TOP3_ID", 2)
+    membre, top3 = _Role(1), _Role(2)
+    a, b, c = _Member(10), _Member(11), _Member(12)
+    await c.add_roles(top3)  # ancien top 3
+    guild = _Guild([a, b, c], [membre, top3])
+    bilan = await synchroniser(guild, {"membres": ["10", "11", "999"], "top3": ["11"]})
+    assert bilan == {"membre_ajouts": 2, "top3_ajouts": 1, "top3_retraits": 1}
+    assert membre in a.roles and membre in b.roles and top3 in b.roles and top3 not in c.roles
+    # idempotent
+    assert await synchroniser(guild, {"membres": ["10", "11"], "top3": ["11"]}) == {
+        "membre_ajouts": 0, "top3_ajouts": 0, "top3_retraits": 0}
+
+
+@run_async
+async def test_role_membre_donne_a_l_inscription(monkeypatch):
+    import discord
+    import config
+    from utils.roles import donner_role_membre
+    monkeypatch.setattr(config, "ROLE_MEMBRE_ID", 1)
+    role = _Role(1)
+    m = _Member(10)
+    monkeypatch.setattr(discord, "Member", _Member)  # isinstance(user, discord.Member)
+    assert await donner_role_membre(m, _Guild([m], [role])) is True
+    assert await donner_role_membre(m, _Guild([m], [role])) is False  # déjà attribué
+    assert await donner_role_membre(m, None) is False

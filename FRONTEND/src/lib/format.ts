@@ -64,3 +64,17 @@ export const JEUX: { value: string; label: string; color: string }[] = [
     { value: "autre", label: "Autre", color: "#b9a98d" },
 ];
 export const jeuInfo = (v?: string | null) => JEUX.find((j) => j.value === v) ?? null;
+
+export const CATEGORIES: Record<string, { label: string; emoji: string }> = {
+    organisation: { label: "Aide à l'organisation", emoji: "🛠️" },
+    tournoi: { label: "Tournoi", emoji: "⚔️" },
+    penalite: { label: "Pénalité", emoji: "⚠️" },
+    autre: { label: "Autre", emoji: "✨" },
+};
+
+export const formatSigne = (n: number) => (n > 0 ? `+${formatPoints(n)}` : formatPoints(n));
+
+export const formatDateHeure = (iso: string) =>
+    new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+
+export const libellePlace = (p: number) => (p === 1 ? "1re" : `${p}e`);

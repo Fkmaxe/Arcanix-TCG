@@ -25,6 +25,7 @@ export default function SeanceForm({ seance, onSuccess }: { seance?: Seance; onS
         jeu: seance?.jeu ?? "",
         description: seance?.description ?? "",
         nb_point: String(seance?.nb_point ?? 1),
+        places_max: seance?.places_max ? String(seance.places_max) : "",
     });
     const [semestreId, setSemestreId] = useState<number | undefined>(seance?.semestre_id);
     const [loading, setLoading] = useState(false);
@@ -44,6 +45,7 @@ export default function SeanceForm({ seance, onSuccess }: { seance?: Seance; onS
             description: form.description.trim() || null,
             nb_point: Number(form.nb_point.replace(",", ".")),
             semestre_id: semestre,
+            places_max: form.places_max ? Number(form.places_max) : null,
         };
         setLoading(true);
         try {
@@ -89,9 +91,15 @@ export default function SeanceForm({ seance, onSuccess }: { seance?: Seance; onS
                     <Input id="s-pts" type="number" inputMode="decimal" min={0} max={9999} step={0.5} value={form.nb_point} onChange={set("nb_point")} required />
                 </div>
             </div>
-            <div className="space-y-1.5">
-                <Label htmlFor="s-lieu">Lieu</Label>
-                <Input id="s-lieu" value={form.lieu} onChange={set("lieu")} placeholder="Salle B204" maxLength={150} />
+            <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                    <Label htmlFor="s-lieu">Lieu</Label>
+                    <Input id="s-lieu" value={form.lieu} onChange={set("lieu")} placeholder="Salle B204" maxLength={150} />
+                </div>
+                <div className="space-y-1.5">
+                    <Label htmlFor="s-places">Places max</Label>
+                    <Input id="s-places" type="number" inputMode="numeric" min={1} max={1000} value={form.places_max} onChange={set("places_max")} placeholder="Illimité" />
+                </div>
             </div>
             <div className="space-y-1.5">
                 <Label htmlFor="s-sem">Semestre</Label>

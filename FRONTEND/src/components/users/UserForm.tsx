@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PasswordInput } from "@/components/common/PasswordForm";
+import { Checkbox } from "@/components/ui/checkbox";
+import { useConfig } from "@/lib/useConfig";
 import { UsersApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { ROLE_LABELS } from "@/lib/format";
@@ -27,6 +29,9 @@ export default function UserForm({ user, onSuccess }: { user?: User; onSuccess: 
         password: "",
     });
     const [loading, setLoading] = useState(false);
+    const { smtp } = useConfig();
+    const [invitation, setInvitation] = useState(true);
+    const parEmail = !user && smtp && invitation;
     const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
 
     const submit = async (e: React.FormEvent) => {
@@ -39,8 +44,13 @@ export default function UserForm({ user, onSuccess }: { user?: User; onSuccess: 
                 if (password) await UsersApi.setPassword(user.id, password);
                 toast.success("Membre mis à jour");
             } else {
-                await UsersApi.create({ ...profil, password });
-                toast.success("Membre créé — il devra choisir son mot de passe à la première connexion");
+                if (parEmail) {
+                    await UsersApi.create({ ...profil, envoyer_invitation: true });
+                    toast.success(`Invitation envoyée à ${profil.adresse_mail}`);
+                } else {
+                    await UsersApi.create({ ...profil, password });
+                    toast.success("Membre créé — il devra choisir son mot de passe à la première connexion");
+                }
             }
             onSuccess();
         } catch (err) {
@@ -87,19 +97,30 @@ export default function UserForm({ user, onSuccess }: { user?: User; onSuccess: 
                     </Select>
                 </div>
             </div>
+            {!user && smtp && (
+                <label className="bg-surface/60 flex items-start gap-3 rounded-lg border p-3 text-sm">
+                    <Checkbox checked={invitation} onCheckedChange={(v) => setInvitation(!!v)} className="mt-0.5" />
+                    <span>
+                        <span className="font-medium">Envoyer une invitation par email</span>
+                        <span className="text-muted-foreground block text-xs">Le membre choisira lui-même son mot de passe (lien valable 48 h).</span>
+                    </span>
+                </label>
+            )}
+            {!parEmail && (
             <div className="space-y-1.5">
                 <Label htmlFor="u-pwd">{user ? "Nouveau mot de passe provisoire" : "Mot de passe provisoire"}</Label>
                 <PasswordInput
                     id="u-pwd"
                     value={form.password}
                     onChange={set("password")}
-                    required={!user}
+                    required={!user && !parEmail}
                     minLength={8}
                     autoComplete="new-password"
                     placeholder={user ? "Laisser vide pour ne pas changer" : "8 caractères minimum"}
                 />
                 <p className="text-muted-foreground text-xs">Le membre devra le remplacer à sa prochaine connexion.</p>
             </div>
+            )}
             <Button type="submit" className="w-full" disabled={loading}>
                 {loading && <Loader2 className="animate-spin" />} {user ? "Enregistrer" : "Créer le membre"}
             </Button>

@@ -92,6 +92,7 @@ export default function ExportsPage() {
                         { key: "nom", header: "Nom", render: (r) => `${r.nom} ${r.prenom}` },
                         { key: "classe", header: "Classe", render: (r) => r.classe },
                         { key: "presences", header: "Présences", render: (r) => r.presences },
+                        { key: "bonus", header: "Bonus/malus", render: (r) => (r.bonus ? <span className={r.bonus > 0 ? "text-success" : "text-destructive"}>{r.bonus > 0 ? "+" : ""}{formatPoints(r.bonus)}</span> : "—") },
                         { key: "points", header: "Points", render: (r) => <span className="text-gold font-semibold">{formatPoints(r.points)}</span> },
                     ]}
                 />

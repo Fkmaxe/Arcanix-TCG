@@ -11,13 +11,15 @@ from utils.api import ApiClient
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s : %(message)s")
 log = logging.getLogger("arcanix")
 
-EXTENSIONS = ("cogs.compte", "cogs.membres", "cogs.moderation", "cogs.annonces")
+EXTENSIONS = ("cogs.compte", "cogs.membres", "cogs.moderation", "cogs.inscriptions", "cogs.annonces", "cogs.roles")
 
 
 class ArcanixBot(commands.Bot):
     def __init__(self):
-        # Les commandes slash n'ont besoin d'aucun intent privilégié
-        super().__init__(command_prefix=commands.when_mentioned, intents=discord.Intents.default(), help_command=None)
+        intents = discord.Intents.default()
+        # Seule la synchronisation des rôles a besoin de l'intent privilégié « Server Members »
+        intents.members = config.SYNC_ROLES
+        super().__init__(command_prefix=commands.when_mentioned, intents=intents, help_command=None)
         self.api = ApiClient()
 
     async def setup_hook(self):

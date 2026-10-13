@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MeApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { formatDate, formatPoints, ROLE_LABELS, semestreLabel } from "@/lib/format";
+import { CATEGORIES, formatDate, formatPoints, formatSigne, ROLE_LABELS, semestreLabel } from "@/lib/format";
 import { errorMessage } from "@/lib/swr";
 
 function InfosForm() {
@@ -158,6 +158,7 @@ export default function ProfilPage() {
     const { data: stats } = useSWR(["/me/stats", semestreId], () => MeApi.stats(semestreId));
     const { data: points } = useSWR("/me/points", () => MeApi.points());
     const { data: historique = [] } = useSWR(["/me/participations", semestreId], () => MeApi.participations(semestreId));
+    const { data: ajustements = [] } = useSWR(["/me/ajustements", semestreId], () => MeApi.ajustements(semestreId));
 
     return (
         <div className="space-y-8">
@@ -210,6 +211,20 @@ export default function ProfilPage() {
 
             <section id="historique" className="scroll-mt-24">
                 <SectionTitle>Historique</SectionTitle>
+                {ajustements.length > 0 && (
+                    <ul className="bg-card mb-3 divide-y rounded-xl border">
+                        {ajustements.map((a) => (
+                            <li key={a.id} className="flex items-center gap-3 px-4 py-3">
+                                <span className="text-lg" aria-hidden>{CATEGORIES[a.categorie]?.emoji}</span>
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium">{a.motif}</p>
+                                    <p className="text-muted-foreground text-xs">{CATEGORIES[a.categorie]?.label} · {formatDate(a.cree_le.slice(0, 10), "jour")}</p>
+                                </div>
+                                <span className={`font-display text-sm font-bold whitespace-nowrap ${a.points > 0 ? "text-success" : "text-destructive"}`}>{formatSigne(a.points)}</span>
+                            </li>
+                        ))}
+                    </ul>
+                )}
                 {historique.length ? (
                     <ul className="bg-card divide-y rounded-xl border">
                         {historique.map((p) => (

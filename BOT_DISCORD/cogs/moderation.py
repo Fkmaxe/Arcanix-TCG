@@ -10,6 +10,12 @@ from utils import embeds
 from utils.api import ApiError
 
 JEU_CHOIX = [app_commands.Choice(name=label, value=val) for val, label in embeds.JEUX.items()]
+CATEGORIES = [
+    app_commands.Choice(name="Aide à l'organisation", value="organisation"),
+    app_commands.Choice(name="Tournoi", value="tournoi"),
+    app_commands.Choice(name="Pénalité", value="penalite"),
+    app_commands.Choice(name="Autre", value="autre"),
+]
 
 
 def parse_date(txt: str) -> str:
@@ -148,6 +154,26 @@ class Moderation(commands.GroupCog, group_name="mod", group_description="Outils 
         e = embeds.embed(f"📋 Appel · {s['nom']}", embeds.ligne_seance(s), thumbnail=False)
         e.set_footer(text="Sélectionne jusqu'à 25 membres puis valide. Recommence pour en ajouter d'autres.")
         await interaction.followup.send(embed=e, view=PresenceView(self.bot, s, interaction.user.id), ephemeral=True)
+
+    @app_commands.command(name="points", description="Donner un bonus (ou un malus) de points à un membre")
+    @app_commands.describe(membre="Membre concerné", points="Points à ajouter (négatif pour un malus)",
+                           motif="Raison, visible par le membre", categorie="Type d'ajustement")
+    @app_commands.choices(categorie=CATEGORIES)
+    async def points(self, interaction: discord.Interaction, membre: discord.Member,
+                     points: app_commands.Range[float, -100, 100], motif: app_commands.Range[str, 3, 300],
+                     categorie: app_commands.Choice[str] | None = None):
+        if points == 0:
+            return await interaction.response.send_message(embed=embeds.erreur("Les points doivent être différents de 0."), ephemeral=True)
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        try:
+            a = await self.bot.api.ajustement(interaction.user.id, membre.id, round(points, 2), motif.strip(),
+                                              categorie.value if categorie else "autre")
+        except ApiError as e:
+            return await interaction.followup.send(embed=embeds.erreur(e.message), ephemeral=True)
+        signe = f"+{embeds.pts(a['points'])}" if a["points"] > 0 else embeds.pts(a["points"])
+        await interaction.followup.send(
+            embed=embeds.succes(f"{signe} pts pour {membre.mention} ({a['prenom']} {a['nom']}) : {a['motif']}"),
+            ephemeral=True)
 
 
 async def setup(bot):

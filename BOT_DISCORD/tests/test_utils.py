@@ -59,7 +59,11 @@ def test_annonce_nouvelle_seance():
     assert e.title == "🔥 Nouvelle séance : Draft Magic"
     champs = {f.name: f.value for f in e.fields}
     assert champs["🃏 Jeu"] == "Magic" and champs["🔥 Points"] == "+1,5"
-    assert view.children[0].url == "https://arcanix.example/seances/7"
+    # Boutons « Je viens » / « Je ne viens plus » persistants, puis le lien
+    ids = [c.item.custom_id for c in view.children[:2]]
+    assert ids == ["arcanix:inscr:in:7", "arcanix:inscr:out:7"]
+    assert view.children[2].url == "https://arcanix.example/seances/7"
+    assert view.timeout is None
 
 
 def test_annonce_rappel_et_podium():
