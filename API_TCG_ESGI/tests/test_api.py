@@ -185,7 +185,7 @@ def test_lier_discord_par_code(client, make_user):
 
 def test_presences_discord_reservees_moderation(client, make_user):
     admin = make_user("admin", discord_id="1")
-    membre = make_user("user", discord_id="2")
+    make_user("user", discord_id="2")
     sem = _semestre(client, admin)
     s = _seance(client, admin, sem["id"])
     r = client.post(f"/discord/seances/{s['id']}/presences", headers=BOT,

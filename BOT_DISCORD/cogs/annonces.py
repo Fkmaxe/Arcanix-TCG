@@ -78,13 +78,9 @@ class Annonces(commands.Cog):
         mention = f"<@&{config.ANNONCES_ROLE_ID}>" if config.ANNONCES_ROLE_ID else None
         for a in annonces:
             e, view = construire(a)
+            contenu = mention if a["type"] != "rappel" else None
             try:
-                await channel.send(
-                    content=mention if a["type"] != "rappel" else None,
-                    embed=e,
-                    view=view or discord.utils.MISSING,
-                    allowed_mentions=discord.AllowedMentions(roles=True),
-                )
+                await self._publier(channel, contenu, e, view)
                 faites.append({"type": a["type"], "id": a["id"]})
             except discord.DiscordException as err:
                 log.error("Envoi de l'annonce %s/%s échoué : %s", a["type"], a["id"], err)
@@ -94,6 +90,18 @@ class Annonces(commands.Cog):
                 log.info("%d annonce(s) publiée(s)", len(faites))
             except ApiError as err:
                 log.error("Acquittement des annonces échoué : %s", err.message)
+
+    @staticmethod
+    async def _publier(channel, contenu, e: discord.Embed, view: discord.ui.View | None):
+        mentions = discord.AllowedMentions(roles=True)
+        try:
+            await channel.send(content=contenu, embed=e, view=view or discord.utils.MISSING, allowed_mentions=mentions)
+        except discord.HTTPException as err:
+            if view is None or err.status != 400:
+                raise
+            # Bouton refusé par Discord : on publie quand même l'annonce, sans les boutons
+            log.warning("Annonce publiée sans boutons (refusés par Discord : %s)", err.text or err)
+            await channel.send(content=contenu, embed=e, allowed_mentions=mentions)
 
     @boucle.before_loop
     async def avant(self):

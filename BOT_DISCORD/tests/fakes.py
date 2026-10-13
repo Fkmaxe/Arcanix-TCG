@@ -71,8 +71,11 @@ class FakeResponse:
         self.deferred = {"ephemeral": ephemeral, "thinking": thinking}
 
     async def send_message(self, content=None, *, embed=None, view=None, ephemeral=False, **_):
-        self._done = True
+        import discord
+        if view is discord.utils.MISSING:
+            view = None
         self.inter.envois.append(Envoi("reponse", content, embed, view, ephemeral))
+        self._done = True
 
     async def send_modal(self, modal):
         self._done = True
@@ -87,6 +90,9 @@ class FakeFollowup:
         import discord
         if view is discord.utils.MISSING:
             view = None
+        if view is not None and self.inter.refuser_liens and any(getattr(b, "url", None) for b in view.children):
+            # Comme Discord avec une URL de bouton invalide (ex. localhost)
+            raise discord.HTTPException(SimpleNamespace(status=400, reason="Bad Request"), "Invalid Form Body: url")
         self.inter.envois.append(Envoi("suivi", content, embed, view, ephemeral))
 
 
@@ -111,6 +117,7 @@ class FakeInteraction:
         self.client = client
         self.message = message
         self.guild = guild
+        self.refuser_liens = False  # simule le refus des boutons-liens par Discord
 
     async def edit_original_response(self, *, embed=None, view=None, content=None):
         self.envois.append(Envoi("edition", content, embed, view))
@@ -182,3 +189,13 @@ def remplir(modal, **valeurs):
     for nom, valeur in valeurs.items():
         getattr(modal, nom)._value = valeur
     return modal
+
+
+async def lancer(coro, inter: "FakeInteraction"):
+    """Exécute une commande / un formulaire / un bouton comme Discord le ferait :
+    une exception aboutit au gestionnaire d'erreurs du bot (le membre reçoit toujours un message)."""
+    from utils.interactions import signaler
+    try:
+        await coro
+    except Exception as e:  # noqa: BLE001
+        await signaler(inter, e)

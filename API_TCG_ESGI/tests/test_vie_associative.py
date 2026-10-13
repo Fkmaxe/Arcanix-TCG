@@ -257,8 +257,8 @@ def test_gabarit_email_echappe_et_texte(monkeypatch):
 # --- Discord -------------------------------------------------------------------------------------------------
 def test_discord_inscription_bouton_ajustement_et_roles(client, make_user):
     admin = make_user("admin", discord_id="1")
-    a = make_user(discord_id="2", prenom="A")
-    b = make_user(discord_id="3", prenom="B")
+    make_user(discord_id="2", prenom="A")
+    make_user(discord_id="3", prenom="B")
     make_user(prenom="SansDiscord")
     s = _seance(client, admin, _semestre(client, admin)["id"], places_max=1)
     r = client.post(f"/discord/seances/{s['id']}/inscription", headers=BOT, json={"discord_id": "2", "action": "in"}).json()

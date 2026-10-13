@@ -8,6 +8,7 @@ from discord.ext import commands
 
 from utils import embeds
 from utils.api import ApiError
+from utils.interactions import Formulaire, Vue, repondre
 
 JEU_CHOIX = [app_commands.Choice(name=label, value=val) for val, label in embeds.JEUX.items()]
 CATEGORIES = [
@@ -37,7 +38,7 @@ def parse_heure(txt: str) -> str | None:
     return f"{int(m[1]):02d}:{int(m[2] or 0):02d}"
 
 
-class SeanceModal(discord.ui.Modal, title="Nouvelle séance"):
+class SeanceModal(Formulaire, title="Nouvelle séance"):
     nom = discord.ui.TextInput(label="Nom", placeholder="Tournoi Pokémon", max_length=150)
     jour = discord.ui.TextInput(label="Date (JJ/MM/AAAA)", placeholder="25/10/2026", max_length=10)
     heure = discord.ui.TextInput(label="Heure (optionnel)", placeholder="18h30", required=False, max_length=5)
@@ -57,23 +58,23 @@ class SeanceModal(discord.ui.Modal, title="Nouvelle séance"):
             if nb < 0:
                 raise ValueError
         except ValueError:
-            return await interaction.response.send_message(
-                embed=embeds.erreur("Date (JJ/MM/AAAA), heure (18h30) ou points invalides."), ephemeral=True)
+            return await repondre(interaction, embed=embeds.erreur("Date (JJ/MM/AAAA), heure (18h30) ou points invalides."))
         await interaction.response.defer(ephemeral=True, thinking=True)
-        try:
-            s = await self.bot.api.creer_seance(
-                interaction.user.id, nom=str(self.nom).strip(), date_seance=jour, heure_debut=heure,
-                lieu=str(self.lieu).strip() or None, jeu=self.jeu, nb_point=nb,
-            )
-        except ApiError as e:
-            return await interaction.followup.send(embed=embeds.erreur(e.message), ephemeral=True)
+        s = await self.bot.api.creer_seance(
+            interaction.user.id, nom=str(self.nom).strip(), date_seance=jour, heure_debut=heure,
+            lieu=str(self.lieu).strip() or None, jeu=self.jeu, nb_point=nb,
+        )
         e = embeds.seance_embed(s, f"✅ Séance créée : {s['nom']}", embeds.SUCCES)
         e.description = "Elle sera annoncée automatiquement dans le salon des annonces."
-        view = embeds.bouton_lien("Ouvrir sur le site", embeds.site_url(f"/seances/{s['id']}"), "🌐")
-        await interaction.followup.send(embed=e, view=view or discord.utils.MISSING, ephemeral=True)
+        await repondre(interaction, embed=e,
+                       view=embeds.bouton_lien("Ouvrir sur le site", embeds.site_url(f"/seances/{s['id']}"), "🌐"))
 
 
-class PresenceView(discord.ui.View):
+def _mentions(ids: list[str]) -> str:
+    return ", ".join(f"<@{i}>" for i in ids)[:1024] or "—"
+
+
+class PresenceView(Vue):
     """Sélection multiple des membres présents (25 max par validation)."""
 
     def __init__(self, bot, seance: dict, auteur_id: int):
@@ -94,21 +95,21 @@ class PresenceView(discord.ui.View):
     @discord.ui.button(label="Valider les présences", style=discord.ButtonStyle.success, emoji="✅")
     async def valider(self, interaction: discord.Interaction, _button: discord.ui.Button):
         if not self.selection:
-            return await interaction.response.send_message(embed=embeds.erreur("Sélectionne au moins un membre."), ephemeral=True)
+            return await repondre(interaction, embed=embeds.erreur("Sélectionne au moins un membre."))
         await interaction.response.defer()
-        try:
-            r = await self.bot.api.presences(self.seance["id"], self.auteur_id, [u.id for u in self.selection])
-        except ApiError as e:
-            return await interaction.followup.send(embed=embeds.erreur(e.message), ephemeral=True)
-        mention = lambda ids: ", ".join(f"<@{i}>" for i in ids) or "—"  # noqa: E731
-        e = embeds.embed(f"📋 Appel · {r['seance']['nom']}", f"{r['seance']['nb_presents']} présent(s) au total.", embeds.SUCCES, thumbnail=False)
-        e.add_field(name=f"✅ Ajoutés (+{embeds.pts(r['seance']['nb_point'])} pts)", value=mention(r["ajoutes"]), inline=False)
+        r = await self.bot.api.presences(self.seance["id"], self.auteur_id, [u.id for u in self.selection])
+        s = r["seance"]
+        e = embeds.embed(f"📋 Appel · {s['nom']}", f"{s['nb_presents']} présent(s) au total.", embeds.SUCCES, thumbnail=False)
+        e.add_field(name=f"✅ Ajoutés (+{embeds.pts(s['nb_point'])} pts)", value=_mentions(r["ajoutes"]), inline=False)
         if r["deja_presents"]:
-            e.add_field(name="☑️ Déjà présents", value=mention(r["deja_presents"]), inline=False)
+            e.add_field(name="☑️ Déjà présents", value=_mentions(r["deja_presents"]), inline=False)
         if r["non_lies"]:
-            e.add_field(name="⚠️ Sans compte lié (non comptés)", value=mention(r["non_lies"]) + "\n→ ils doivent faire `/register` ou `/lier`.", inline=False)
-        self.selection = []
-        await interaction.edit_original_response(embed=e, view=self)
+            e.add_field(name="⚠️ Sans compte lié (non comptés)",
+                        value=_mentions(r["non_lies"])[:960] + "\n→ ils doivent faire `/register` ou `/lier`.", inline=False)
+        e.set_footer(text="Sélectionne d'autres membres pour continuer l'appel.")
+        # Nouvelle vue : le menu repart vide (l'ancien gardait l'affichage de la sélection précédente)
+        self.stop()
+        await interaction.edit_original_response(embed=e, view=PresenceView(self.bot, self.seance, self.auteur_id))
 
 
 @app_commands.default_permissions(manage_events=True)
@@ -135,25 +136,23 @@ class Moderation(commands.GroupCog, group_name="mod", group_description="Outils 
         await interaction.response.send_modal(SeanceModal(self.bot, jeu.value if jeu else None))
 
     @app_commands.command(name="presence", description="Valider la présence de membres à une séance")
-    @app_commands.describe(seance="Séance (±30 jours)")
+    @app_commands.describe(seance="Séance (tape quelques lettres de son nom)")
     @app_commands.autocomplete(seance=_seance_autocomplete)
     async def presence(self, interaction: discord.Interaction, seance: int):
         await interaction.response.defer(ephemeral=True, thinking=True)
+        # Vérifie les droits tôt (l'API revérifie à la validation)
+        moi = await self.bot.api.membre(interaction.user.id)
+        if moi["role_utilisateur"] not in ("moderator", "admin"):
+            return await repondre(interaction, embed=embeds.erreur("Commande réservée à la modération."))
         try:
-            # Vérifie les droits tôt (403 si l'auteur n'est pas modérateur)
-            moi = await self.bot.api.membre(interaction.user.id)
-            if moi["role_utilisateur"] not in ("moderator", "admin"):
-                return await interaction.followup.send(embed=embeds.erreur("Commande réservée à la modération."), ephemeral=True)
-            choix = await self.bot.api.seances_recherche("")
+            s = await self.bot.api.seance(seance)
         except ApiError as e:
-            msg = "Lie d'abord ton compte avec `/lier`." if e.status == 404 else e.message
-            return await interaction.followup.send(embed=embeds.erreur(msg), ephemeral=True)
-        s = next((x for x in choix if x["id"] == seance), None)
-        if not s:
-            return await interaction.followup.send(embed=embeds.erreur("Séance introuvable : choisis-la dans la liste."), ephemeral=True)
+            if e.status == 404:
+                return await repondre(interaction, embed=embeds.erreur("Séance introuvable : choisis-la dans la liste."))
+            raise
         e = embeds.embed(f"📋 Appel · {s['nom']}", embeds.ligne_seance(s), thumbnail=False)
         e.set_footer(text="Sélectionne jusqu'à 25 membres puis valide. Recommence pour en ajouter d'autres.")
-        await interaction.followup.send(embed=e, view=PresenceView(self.bot, s, interaction.user.id), ephemeral=True)
+        await repondre(interaction, embed=e, view=PresenceView(self.bot, s, interaction.user.id))
 
     @app_commands.command(name="points", description="Donner un bonus (ou un malus) de points à un membre")
     @app_commands.describe(membre="Membre concerné", points="Points à ajouter (négatif pour un malus)",
@@ -163,17 +162,12 @@ class Moderation(commands.GroupCog, group_name="mod", group_description="Outils 
                      points: app_commands.Range[float, -100, 100], motif: app_commands.Range[str, 3, 300],
                      categorie: app_commands.Choice[str] | None = None):
         if points == 0:
-            return await interaction.response.send_message(embed=embeds.erreur("Les points doivent être différents de 0."), ephemeral=True)
+            return await repondre(interaction, embed=embeds.erreur("Les points doivent être différents de 0."))
         await interaction.response.defer(ephemeral=True, thinking=True)
-        try:
-            a = await self.bot.api.ajustement(interaction.user.id, membre.id, round(points, 2), motif.strip(),
-                                              categorie.value if categorie else "autre")
-        except ApiError as e:
-            return await interaction.followup.send(embed=embeds.erreur(e.message), ephemeral=True)
+        a = await self.bot.api.ajustement(interaction.user.id, membre.id, round(points, 2), motif.strip(),
+                                          categorie.value if categorie else "autre")
         signe = f"+{embeds.pts(a['points'])}" if a["points"] > 0 else embeds.pts(a["points"])
-        await interaction.followup.send(
-            embed=embeds.succes(f"{signe} pts pour {membre.mention} ({a['prenom']} {a['nom']}) : {a['motif']}"),
-            ephemeral=True)
+        await repondre(interaction, embed=embeds.succes(f"{signe} pts pour {membre.mention} ({a['prenom']} {a['nom']}) : {a['motif']}"))
 
 
 async def setup(bot):

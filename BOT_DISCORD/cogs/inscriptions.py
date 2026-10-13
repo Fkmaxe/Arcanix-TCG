@@ -5,7 +5,7 @@ import discord
 from discord.ext import commands
 
 from utils import embeds
-from utils.api import ApiError
+from utils.interactions import repondre, signaler
 
 log = logging.getLogger("arcanix.inscriptions")
 
@@ -28,15 +28,15 @@ class BoutonInscription(discord.ui.DynamicItem[discord.ui.Button], template=r"ar
         return cls(match["action"], int(match["sid"]))
 
     async def callback(self, interaction: discord.Interaction):
-        api = interaction.client.api
-        await interaction.response.defer(ephemeral=True, thinking=True)
+        # Les erreurs d'un bouton dynamique ne passent par aucun gestionnaire : on les signale ici
         try:
-            r = await api.inscription_seance(self.seance_id, interaction.user.id, self.action)
-        except ApiError as e:
-            msg = ("Lie d'abord ton compte Arcanix : `/register` (nouveau) ou `/lier` (compte du site)."
-                   if e.status == 404 and "lié" in e.message else e.message)
-            return await interaction.followup.send(embed=embeds.erreur(msg), ephemeral=True)
+            await self._traiter(interaction)
+        except Exception as e:  # noqa: BLE001
+            await signaler(interaction, e)
 
+    async def _traiter(self, interaction: discord.Interaction):
+        await interaction.response.defer(ephemeral=True, thinking=True)
+        r = await interaction.client.api.inscription_seance(self.seance_id, interaction.user.id, self.action)
         s = r["seance"]
         if r["statut"] == "inscrit":
             msg = embeds.succes(f"C'est noté, tu es inscrit·e à **{s['nom']}** ! À bientôt 🔥")
@@ -46,7 +46,7 @@ class BoutonInscription(discord.ui.DynamicItem[discord.ui.Button], template=r"ar
                                "tu seras prévenu·e si une place se libère.", embeds.OR, thumbnail=False)
         else:
             msg = embeds.succes(f"Désinscription prise en compte pour **{s['nom']}**.")
-        await interaction.followup.send(embed=msg, ephemeral=True)
+        await repondre(interaction, embed=msg)
 
         # Compteur à jour dans l'annonce
         if interaction.message and interaction.message.embeds:
@@ -74,7 +74,7 @@ def vue_inscription(s: dict) -> discord.ui.View:
     v.add_item(BoutonInscription("in", s["id"]))
     v.add_item(BoutonInscription("out", s["id"]))
     url = embeds.site_url(f"/seances/{s['id']}")
-    if embeds.lien_valide(url):
+    if embeds.adresse_publique(url):
         v.add_item(discord.ui.Button(label="Détails", url=url, emoji="🌐"))
     return v
 

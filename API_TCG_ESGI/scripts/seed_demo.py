@@ -33,7 +33,7 @@ def main() -> None:
         Utilisateur(nom=n, prenom=p, adresse_mail=f"{p.lower()}.{n.lower()}@exemple.fr".replace("é", "e").replace("è", "e").replace("ï", "i"),
                     role_utilisateur="user", classe=random.choice(["1A", "2A", "3A-INFO", "4A-SEC"]), mot_de_passe_hash=pwd,
                     discord_id=str(1000 + i) if i % 3 else None)
-        for i, (p, n) in enumerate(zip(PRENOMS, NOMS))
+        for i, (p, n) in enumerate(zip(PRENOMS, NOMS, strict=True))
     ]
     db.add_all(staff + membres)
     s1 = Semestre(annee=2026, numero=1, actif=False)
@@ -65,7 +65,7 @@ def main() -> None:
     a_venir[0].places_max = 12
     if len(a_venir) > 1:
         a_venir[1].places_max = 16
-    for s, n in zip(a_venir, (11, 6, 3)):
+    for s, n in zip(a_venir, (11, 6, 3), strict=False):
         for u in random.sample(membres, k=n):
             db.add(Inscription(utilisateur_id=u.id, seance_id=s.id, statut="inscrit"))
 

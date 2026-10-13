@@ -1,6 +1,6 @@
 """Requêtes partagées entre les routeurs (site + bot)."""
 from datetime import date
-from typing import Iterable
+from collections.abc import Iterable
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session

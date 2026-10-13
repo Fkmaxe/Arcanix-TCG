@@ -5,6 +5,7 @@ Prérequis : API démarrée sur une base remplie par `python -m scripts.seed_dem
 """
 import os
 import random
+import re
 from datetime import date, timedelta
 
 import aiohttp
@@ -12,12 +13,12 @@ import pytest
 
 import config
 from cogs.annonces import Annonces
-from cogs.compte import Compte, InscriptionModal
+from cogs.compte import Compte
 from cogs.inscriptions import BoutonInscription
 from utils import embeds
 from cogs.membres import Membres
 from cogs.moderation import Moderation, PresenceView, SeanceModal
-from tests.fakes import FakeBot, FakeInteraction, FakeMessage, FakeUser, remplir, run_async
+from tests.fakes import lancer, FakeBot, FakeInteraction, FakeMessage, FakeUser, remplir, run_async
 from utils.api import ApiClient
 
 API = os.getenv("ARCANIX_E2E_API")
@@ -51,9 +52,11 @@ async def test_parcours_complet_du_bot():
         # 1. /register -> formulaire -> lien privé
         compte = Compte(bot)
         inter = FakeInteraction(nouveau)
-        await compte.register.callback(compte, inter)
-        await remplir(inter.response.modal, prenom="Alex", nom="Testeur", email=email, classe="1A").on_submit(inter)
-        lien = inter.dernier.boutons[0].url
+        await lancer(compte.register.callback(compte, inter), inter)
+        await lancer(remplir(inter.response.modal, prenom="Alex", nom="Testeur", email=email, classe="1A").on_submit(inter), inter)
+        # Bouton si FRONTEND_URL est publique, sinon lien écrit en clair (jamais de « réfléchit… » bloqué)
+        boutons = inter.dernier.boutons
+        lien = boutons[0].url if boutons else re.search(r"\S+/activer\?jeton=\S+", inter.dernier.texte).group(0)
         assert "/activer?jeton=" in lien, inter.dernier.texte
 
         # 2. Le lien permet de choisir un mot de passe puis de se connecter sur le site
@@ -66,7 +69,7 @@ async def test_parcours_complet_du_bot():
         # 3. /points : 0 point au départ
         membres = Membres(bot)
         inter = FakeInteraction(nouveau)
-        await membres.points.callback(membres, inter)
+        await lancer(membres.points.callback(membres, inter), inter)
         assert "0 points" in inter.dernier.texte
 
         # 4. /mod seance (admin du jeu de démo) pour demain
@@ -82,22 +85,22 @@ async def test_parcours_complet_du_bot():
         choix = await mod._seance_autocomplete(FakeInteraction(admin), f"E2E {nouveau.id}")
         assert len(choix) == 1
         inter = FakeInteraction(admin)
-        await mod.presence.callback(mod, inter, seance=choix[0].value)
+        await lancer(mod.presence.callback(mod, inter, seance=choix[0].value), inter)
         view = inter.dernier.view
         assert isinstance(view, PresenceView)
         view.selection = [nouveau, FakeUser(id=123)]  # 123 : aucun compte lié
         clic = FakeInteraction(admin)
-        await view.valider.callback(clic)
+        await lancer(view.valider.callback(clic), clic)
         assert f"<@{nouveau.id}>" in clic.dernier.texte and "<@123>" in clic.dernier.texte
 
         # 6. Les points sont crédités
         inter = FakeInteraction(nouveau)
-        await membres.points.callback(membres, inter)
+        await lancer(membres.points.callback(membres, inter), inter)
         assert "2,5 points" in inter.dernier.texte, inter.dernier.texte
 
         # 7. Un membre refuse l'accès à /mod presence
         inter = FakeInteraction(nouveau)
-        await mod.presence.callback(mod, inter, seance=choix[0].value)
+        await lancer(mod.presence.callback(mod, inter, seance=choix[0].value), inter)
         assert "réservée à la modération" in inter.dernier.texte
 
         # 8. Annonces : la nouvelle séance est publiée une seule fois
@@ -115,28 +118,28 @@ async def test_parcours_complet_du_bot():
         status, code = await _http("POST", "/me/code-discord", token=tok_membre["access_token"])
         lie = FakeUser(id=random.randint(10**17, 10**18))
         inter = FakeInteraction(lie)
-        await compte.lier.callback(compte, inter, code=code["code"].lower())
+        await lancer(compte.lier.callback(compte, inter, code=code["code"].lower()), inter)
         assert "Compte lié" in inter.dernier.texte, inter.dernier.texte
 
         # 9b. Bouton « Je viens » sous l'annonce : inscription puis désinscription, compteur à jour
         sid = choix[0].value
         annonce = FakeMessage(bot.channel.messages[0].embed if bot.channel.messages else embeds.embed("x"))
         inter = FakeInteraction(nouveau, client=bot, message=annonce)
-        await BoutonInscription("in", sid).callback(inter)
+        await lancer(BoutonInscription("in", sid).callback(inter), inter)
         assert "inscrit·e" in inter.dernier.texte, inter.dernier.texte
         assert any(f.name == "👥 Inscrits" and f.value.startswith("1") for f in annonce.embeds[0].fields)
         inter = FakeInteraction(nouveau, client=bot, message=annonce)
-        await BoutonInscription("out", sid).callback(inter)
+        await lancer(BoutonInscription("out", sid).callback(inter), inter)
         assert "Désinscription" in inter.dernier.texte
 
         # 9c. /mod points : bonus par l'admin, visible dans /points
         cible = FakeUser(id=nouveau.id)
         cible.mention = f"<@{nouveau.id}>"
         inter = FakeInteraction(admin)
-        await mod.points.callback(mod, inter, membre=cible, points=1.5, motif="Aide au rangement", categorie=None)
+        await lancer(mod.points.callback(mod, inter, membre=cible, points=1.5, motif="Aide au rangement", categorie=None), inter)
         assert "+1,5 pts" in inter.dernier.texte, inter.dernier.texte
         inter = FakeInteraction(nouveau)
-        await membres.points.callback(membres, inter)
+        await lancer(membres.points.callback(membres, inter), inter)
         assert "4 points" in inter.dernier.texte, inter.dernier.texte  # 2,5 (présence) + 1,5 (bonus)
 
         # 9d. Rôles : le nouveau membre est lié
@@ -146,13 +149,13 @@ async def test_parcours_complet_du_bot():
         # 10. /reinitialiser, /classement, /profil, /historique, /seances
         for cmd, cible in ((compte.reinitialiser, compte), (membres.historique, membres), (membres.seances, membres)):
             inter = FakeInteraction(nouveau)
-            await cmd.callback(cible, inter)
+            await lancer(cmd.callback(cible, inter), inter)
             assert "❌" not in inter.dernier.texte, inter.dernier.texte
         inter = FakeInteraction(nouveau)
-        await membres.classement.callback(membres, inter, semestre=None)
+        await lancer(membres.classement.callback(membres, inter, semestre=None), inter)
         assert "Classement" in inter.dernier.texte and "Ta position" in inter.dernier.texte
         inter = FakeInteraction(nouveau)
-        await membres.profil.callback(membres, inter, membre=None)
+        await lancer(membres.profil.callback(membres, inter, membre=None), inter)
         assert "Alex T." in inter.dernier.texte
     finally:
         await bot.api.close()

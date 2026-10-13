@@ -1,4 +1,5 @@
 import logging
+from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -12,6 +13,11 @@ from .routers import ajustements, auth, discord, journal, me, participations, se
 
 logging.basicConfig(level=logging.DEBUG if config.DEBUG else logging.INFO)
 log = logging.getLogger("arcanix")
+
+_hote = urlparse(config.FRONTEND_URL).hostname or ""
+if not config.DEBUG and (_hote in ("localhost", "127.0.0.1") or "." not in _hote):
+    log.warning("FRONTEND_URL=%s n'est pas une adresse publique : les liens des emails, du bot et des QR codes "
+                "ne fonctionneront pas pour les membres (voir docs/CONFIGURATION.md)", config.FRONTEND_URL)
 
 app = FastAPI(title="Arcanix", version="2.0.0", debug=config.DEBUG)
 

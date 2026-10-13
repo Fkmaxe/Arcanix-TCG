@@ -95,6 +95,9 @@ class ApiClient:
     async def seances_a_venir(self, limit: int = 5) -> list[dict]:
         return await self.request("GET", "/discord/seances/a-venir", params={"limit": limit})
 
+    async def seance(self, seance_id: int) -> dict:
+        return await self.request("GET", f"/seances/{seance_id}")
+
     async def seances_recherche(self, q: str = "") -> list[dict]:
         return await self.request("GET", "/discord/seances/recherche", params={"q": q} if q else None)
 

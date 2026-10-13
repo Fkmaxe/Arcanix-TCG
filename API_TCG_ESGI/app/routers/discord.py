@@ -57,7 +57,7 @@ def inscription(body: DiscordRegister, db: Session = Depends(get_db)):
         db.flush()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(409, "Compte déjà existant")
+        raise HTTPException(409, "Compte déjà existant") from None
     url, heures = lien_mot_de_passe(db, user)
     journaliser(db, user, "membre.inscription_discord", f"{user.prenom} {user.nom} s'est inscrit·e via Discord",
                 membre_id=user.id)

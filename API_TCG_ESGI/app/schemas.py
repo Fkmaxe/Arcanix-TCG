@@ -1,12 +1,12 @@
 from datetime import date, datetime, time
-from typing import Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 Role = Literal["user", "moderator", "admin"]
 
 
-def _clean(v: Optional[str]) -> Optional[str]:
+def _clean(v: str | None) -> str | None:
     return v.strip() if isinstance(v, str) else v
 
 
@@ -70,16 +70,16 @@ class UserBase(BaseModel):
 
 class UserCreate(UserBase):
     # Mot de passe provisoire, ou invitation par email (le membre choisit lui-même)
-    password: Optional[str] = Field(default=None, min_length=8, max_length=512)
+    password: str | None = Field(default=None, min_length=8, max_length=512)
     envoyer_invitation: bool = False
 
 
 class UserUpdate(BaseModel):
-    nom: Optional[str] = Field(default=None, min_length=1, max_length=100)
-    prenom: Optional[str] = Field(default=None, min_length=1, max_length=100)
-    adresse_mail: Optional[EmailStr] = None
-    role_utilisateur: Optional[Role] = None
-    classe: Optional[str] = Field(default=None, min_length=1, max_length=50)
+    nom: str | None = Field(default=None, min_length=1, max_length=100)
+    prenom: str | None = Field(default=None, min_length=1, max_length=100)
+    adresse_mail: EmailStr | None = None
+    role_utilisateur: Role | None = None
+    classe: str | None = Field(default=None, min_length=1, max_length=50)
 
     @field_validator("nom", "prenom", "classe")
     @classmethod
@@ -93,9 +93,9 @@ class UserUpdate(BaseModel):
 
 
 class MeUpdate(BaseModel):
-    nom: Optional[str] = Field(default=None, min_length=1, max_length=100)
-    prenom: Optional[str] = Field(default=None, min_length=1, max_length=100)
-    classe: Optional[str] = Field(default=None, min_length=1, max_length=50)
+    nom: str | None = Field(default=None, min_length=1, max_length=100)
+    prenom: str | None = Field(default=None, min_length=1, max_length=100)
+    classe: str | None = Field(default=None, min_length=1, max_length=50)
 
     @field_validator("nom", "prenom", "classe")
     @classmethod
@@ -110,12 +110,12 @@ class UserOut(ORM):
     adresse_mail: str
     role_utilisateur: str
     classe: str
-    discord_id: Optional[str] = None
+    discord_id: str | None = None
     doit_changer_mdp: bool = False
 
 
 class PasswordChange(BaseModel):
-    current_password: Optional[str] = None
+    current_password: str | None = None
     new_password: str = Field(min_length=8, max_length=512)
 
 
@@ -151,8 +151,8 @@ class SemestreCreate(BaseModel):
 
 
 class SemestreUpdate(BaseModel):
-    annee: Optional[int] = Field(default=None, ge=2000, le=2100)
-    numero: Optional[Literal[1, 2]] = None
+    annee: int | None = Field(default=None, ge=2000, le=2100)
+    numero: Literal[1, 2] | None = None
 
 
 class SemestreOut(ORM):
@@ -166,13 +166,13 @@ class SemestreOut(ORM):
 class SeanceBase(BaseModel):
     nom: str = Field(min_length=1, max_length=150)
     date_seance: date
-    heure_debut: Optional[time] = None
-    lieu: Optional[str] = Field(default=None, max_length=150)
-    jeu: Optional[str] = Field(default=None, max_length=50)
-    description: Optional[str] = Field(default=None, max_length=4000)
+    heure_debut: time | None = None
+    lieu: str | None = Field(default=None, max_length=150)
+    jeu: str | None = Field(default=None, max_length=50)
+    description: str | None = Field(default=None, max_length=4000)
     nb_point: float = Field(ge=0, le=9999)
     semestre_id: int
-    places_max: Optional[int] = Field(default=None, ge=1, le=1000)
+    places_max: int | None = Field(default=None, ge=1, le=1000)
 
     @field_validator("nom")
     @classmethod
@@ -193,15 +193,15 @@ class SeanceCreate(SeanceBase):
 
 
 class SeanceUpdate(BaseModel):
-    nom: Optional[str] = Field(default=None, min_length=1, max_length=150)
-    date_seance: Optional[date] = None
-    heure_debut: Optional[time] = None
-    lieu: Optional[str] = Field(default=None, max_length=150)
-    jeu: Optional[str] = Field(default=None, max_length=50)
-    description: Optional[str] = Field(default=None, max_length=4000)
-    nb_point: Optional[float] = Field(default=None, ge=0, le=9999)
-    semestre_id: Optional[int] = None
-    places_max: Optional[int] = Field(default=None, ge=1, le=1000)
+    nom: str | None = Field(default=None, min_length=1, max_length=150)
+    date_seance: date | None = None
+    heure_debut: time | None = None
+    lieu: str | None = Field(default=None, max_length=150)
+    jeu: str | None = Field(default=None, max_length=50)
+    description: str | None = Field(default=None, max_length=4000)
+    nb_point: float | None = Field(default=None, ge=0, le=9999)
+    semestre_id: int | None = None
+    places_max: int | None = Field(default=None, ge=1, le=1000)
 
     @field_validator("lieu", "jeu", "description")
     @classmethod
@@ -213,19 +213,19 @@ class SeanceOut(ORM):
     id: int
     nom: str
     date_seance: date
-    heure_debut: Optional[time] = None
-    lieu: Optional[str] = None
-    jeu: Optional[str] = None
-    description: Optional[str] = None
+    heure_debut: time | None = None
+    lieu: str | None = None
+    jeu: str | None = None
+    description: str | None = None
     nb_point: float
     semestre_id: int
-    semestre: Optional[SemestreOut] = None
+    semestre: SemestreOut | None = None
     nb_participants: int = 0
     nb_presents: int = 0
-    places_max: Optional[int] = None
+    places_max: int | None = None
     nb_inscrits: int = 0
     nb_attente: int = 0
-    mon_inscription: Optional[Literal["inscrit", "attente"]] = None
+    mon_inscription: Literal["inscrit", "attente"] | None = None
     a_resultats: bool = False
 
 
@@ -233,11 +233,11 @@ class ParticipantDetail(BaseModel):
     utilisateur_id: int
     seance_id: int
     present: bool
-    commentaire: Optional[str] = None
+    commentaire: str | None = None
     nom: str
     prenom: str
     classe: str
-    adresse_mail: Optional[str] = None
+    adresse_mail: str | None = None
     discord_lie: bool = False
 
 
@@ -263,17 +263,17 @@ class ResultatOut(BaseModel):
     prenom: str
     nom: str
     place: int
-    victoires: Optional[int] = None
-    defaites: Optional[int] = None
-    nuls: Optional[int] = None
-    deck: Optional[str] = None
+    victoires: int | None = None
+    defaites: int | None = None
+    nuls: int | None = None
+    deck: str | None = None
     bonus: float = 0
     moi: bool = False
 
 
 class SeanceDetail(SeanceOut):
     participants: list[ParticipantDetail] = []
-    ma_participation: Optional[bool] = None  # présence de l'utilisateur connecté
+    ma_participation: bool | None = None  # présence de l'utilisateur connecté
     inscrits: list[InscritDetail] = []       # modération uniquement
     pointages: list[PointageDetail] = []     # modération uniquement
     mon_pointage: bool = False
@@ -282,15 +282,15 @@ class SeanceDetail(SeanceOut):
 
 
 class InscriptionOut(BaseModel):
-    statut: Optional[Literal["inscrit", "attente"]]
+    statut: Literal["inscrit", "attente"] | None
     seance: SeanceOut
 
 
 class PointageInfo(BaseModel):
     ouvert: bool
-    expire_le: Optional[datetime] = None
-    code: Optional[str] = None
-    url: Optional[str] = None
+    expire_le: datetime | None = None
+    code: str | None = None
+    url: str | None = None
     secondes_restantes: int = 0
     periode_s: int
     pointages: list[PointageDetail] = []
@@ -312,10 +312,10 @@ class PointerOut(BaseModel):
 class ResultatIn(BaseModel):
     utilisateur_id: int
     place: int = Field(ge=1, le=999)
-    victoires: Optional[int] = Field(default=None, ge=0, le=99)
-    defaites: Optional[int] = Field(default=None, ge=0, le=99)
-    nuls: Optional[int] = Field(default=None, ge=0, le=99)
-    deck: Optional[str] = Field(default=None, max_length=120)
+    victoires: int | None = Field(default=None, ge=0, le=99)
+    defaites: int | None = Field(default=None, ge=0, le=99)
+    nuls: int | None = Field(default=None, ge=0, le=99)
+    deck: str | None = Field(default=None, max_length=120)
 
     @field_validator("deck")
     @classmethod
@@ -346,7 +346,7 @@ class AjustementIn(BaseModel):
     points: float = Field(ge=-100, le=100)
     motif: str = Field(min_length=3, max_length=300)
     categorie: Categorie = "autre"
-    semestre_id: Optional[int] = None  # semestre actif par défaut
+    semestre_id: int | None = None  # semestre actif par défaut
 
     @field_validator("points")
     @classmethod
@@ -370,11 +370,11 @@ class AjustementOut(BaseModel):
     prenom: str
     nom: str
     semestre: SemestreOut
-    seance_id: Optional[int] = None
+    seance_id: int | None = None
     points: float
     categorie: str
     motif: str
-    cree_par: Optional[str] = None
+    cree_par: str | None = None
     cree_le: datetime
 
 
@@ -384,7 +384,7 @@ class MonAjustement(BaseModel):
     categorie: str
     motif: str
     semestre_id: int
-    seance_id: Optional[int] = None
+    seance_id: int | None = None
     cree_le: datetime
 
 
@@ -392,13 +392,13 @@ class MonAjustement(BaseModel):
 class JournalOut(ORM):
     id: int
     cree_le: datetime
-    auteur_id: Optional[int] = None
+    auteur_id: int | None = None
     auteur_nom: str
     action: str
     resume: str
-    membre_id: Optional[int] = None
-    seance_id: Optional[int] = None
-    details: Optional[dict] = None
+    membre_id: int | None = None
+    seance_id: int | None = None
+    details: dict | None = None
 
 
 # --- Participation -------------------------------------------------------------
@@ -406,7 +406,7 @@ class ParticipationBase(BaseModel):
     utilisateur_id: int
     seance_id: int
     present: bool = True
-    commentaire: Optional[str] = Field(default=None, max_length=1000)
+    commentaire: str | None = Field(default=None, max_length=1000)
 
 
 class ParticipationCreate(ParticipationBase):
@@ -414,21 +414,21 @@ class ParticipationCreate(ParticipationBase):
 
 
 class ParticipationUpdate(BaseModel):
-    present: Optional[bool] = None
-    commentaire: Optional[str] = Field(default=None, max_length=1000)
+    present: bool | None = None
+    commentaire: str | None = Field(default=None, max_length=1000)
 
 
 class ParticipationOut(ORM):
     utilisateur_id: int
     seance_id: int
     present: bool
-    commentaire: Optional[str] = None
+    commentaire: str | None = None
 
 
 class AppelItem(BaseModel):
     utilisateur_id: int
     present: bool = True
-    commentaire: Optional[str] = Field(default=None, max_length=1000)
+    commentaire: str | None = Field(default=None, max_length=1000)
 
 
 class AppelBody(BaseModel):
@@ -441,10 +441,10 @@ class MaParticipation(BaseModel):
     seance_id: int
     seance_nom: str
     date_seance: date
-    jeu: Optional[str] = None
+    jeu: str | None = None
     nb_point: float
     present: bool
-    commentaire: Optional[str] = None
+    commentaire: str | None = None
     semestre_id: int
 
 
@@ -471,9 +471,9 @@ class PointEvolution(BaseModel):
 
 
 class MesStats(BaseModel):
-    semestre: Optional[SemestreOut]
+    semestre: SemestreOut | None
     points: float
-    rang: Optional[int]
+    rang: int | None
     nb_membres_classes: int
     seances_semestre: int
     presences: int
@@ -494,7 +494,7 @@ class LigneClassement(BaseModel):
 
 
 class Classement(BaseModel):
-    semestre: Optional[SemestreOut]
+    semestre: SemestreOut | None
     lignes: list[LigneClassement]
 
 
@@ -528,7 +528,7 @@ class DiscordIdBody(BaseModel):
 
 class DiscordSeanceCreate(SeanceBase):
     auteur_discord_id: str
-    semestre_id: Optional[int] = None  # semestre actif par défaut
+    semestre_id: int | None = None  # semestre actif par défaut
 
 
 class DiscordPresences(BaseModel):
@@ -548,9 +548,9 @@ class DiscordMembre(BaseModel):
     nom: str
     classe: str
     role_utilisateur: str
-    semestre: Optional[SemestreOut]
+    semestre: SemestreOut | None
     points: float
-    rang: Optional[int]
+    rang: int | None
     presences: int
     total_points: float
 
@@ -561,8 +561,8 @@ TypeAnnonce = Literal["nouvelle_seance", "rappel", "podium", "resultats"]
 class Annonce(BaseModel):
     type: TypeAnnonce
     id: int
-    seance: Optional[SeanceOut] = None
-    semestre: Optional[SemestreOut] = None
+    seance: SeanceOut | None = None
+    semestre: SemestreOut | None = None
     podium: list[LigneClassement] = []
     resultats: list[ResultatOut] = []
 
@@ -578,7 +578,7 @@ class DiscordInscription(BaseModel):
 
 
 class DiscordInscriptionOut(BaseModel):
-    statut: Optional[Literal["inscrit", "attente"]]
+    statut: Literal["inscrit", "attente"] | None
     seance: SeanceOut
     promus: list[str] = []  # discord_id des membres sortis de la liste d'attente
 

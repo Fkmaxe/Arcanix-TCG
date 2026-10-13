@@ -5,7 +5,7 @@ from cogs.annonces import Annonces
 from cogs.compte import Compte, InscriptionModal
 from cogs.membres import Membres
 from cogs.moderation import Moderation, PresenceView, SeanceModal
-from tests.fakes import FakeApi, FakeBot, FakeInteraction, FakeMessage, FakeUser, remplir, run_async
+from tests.fakes import lancer, FakeApi, FakeBot, FakeInteraction, FakeMessage, FakeUser, remplir, run_async
 from utils.api import ApiError
 
 SEMESTRE = {"id": 2, "annee": 2026, "numero": 1, "actif": True}
@@ -21,7 +21,7 @@ NON_LIE = ApiError(404, "Aucun compte Arcanix n'est lié à ce compte Discord")
 @run_async
 async def test_register_ouvre_le_formulaire():
     cog, inter = Compte(FakeBot(FakeApi())), FakeInteraction()
-    await cog.register.callback(cog, inter)
+    await lancer(cog.register.callback(cog, inter), inter)
     assert isinstance(inter.response.modal, InscriptionModal)
 
 
@@ -30,7 +30,7 @@ async def test_inscription_envoie_un_lien_prive():
     api = FakeApi(inscription={"url": "https://arcanix.example/activer?jeton=abc", "expire_dans_heures": 48})
     inter = FakeInteraction(FakeUser(id=42))
     modal = remplir(InscriptionModal(FakeBot(api)), prenom=" Jane ", nom="Doe", email="Jane@Ex.com ", classe="2B")
-    await modal.on_submit(inter)
+    await lancer(modal.on_submit(inter), inter)
     assert api.appels_de("inscription") == [((42, "Jane", "Doe", "Jane@Ex.com", "2B"), {})]
     msg = inter.dernier
     assert msg.ephemeral and "Bienvenue" in msg.texte and "48 h" in msg.texte
@@ -42,7 +42,7 @@ async def test_inscription_envoie_un_lien_prive():
 async def test_inscription_deja_faite():
     api = FakeApi(inscription=ApiError(409, "Ce compte Discord est déjà inscrit"))
     inter = FakeInteraction()
-    await remplir(InscriptionModal(FakeBot(api)), prenom="a", nom="b", email="c@d.fr", classe="e").on_submit(inter)
+    await lancer(remplir(InscriptionModal(FakeBot(api)), prenom="a", nom="b", email="c@d.fr", classe="e").on_submit(inter), inter)
     assert "déjà inscrit" in inter.dernier.texte and inter.dernier.ephemeral
 
 
@@ -50,20 +50,20 @@ async def test_inscription_deja_faite():
 async def test_lier_et_code_invalide():
     api = FakeApi(lier=MEMBRE)
     cog, inter = Compte(FakeBot(api)), FakeInteraction()
-    await cog.lier.callback(cog, inter, code=" abc123 ")
+    await lancer(cog.lier.callback(cog, inter, code=" abc123 "), inter)
     assert api.appels_de("lier")[0][0] == (100, "abc123")
     assert "Jules Fontaine" in inter.dernier.texte and "7,5 pts" in inter.dernier.texte
 
     api.reponses["lier"] = ApiError(400, "Lien ou code invalide ou expiré")
     inter = FakeInteraction()
-    await cog.lier.callback(cog, inter, code="zzz")
+    await lancer(cog.lier.callback(cog, inter, code="zzz"), inter)
     assert "invalide ou expiré" in inter.dernier.texte
 
 
 @run_async
 async def test_reinitialiser_sans_compte():
     cog, inter = Compte(FakeBot(FakeApi(reinitialiser=NON_LIE))), FakeInteraction()
-    await cog.reinitialiser.callback(cog, inter)
+    await lancer(cog.reinitialiser.callback(cog, inter), inter)
     assert "/register" in inter.dernier.texte
 
 
@@ -71,16 +71,16 @@ async def test_reinitialiser_sans_compte():
 async def test_lien_http_local_affiche_en_clair_si_bouton_impossible():
     api = FakeApi(reinitialiser={"url": "localhost:3000/activer?jeton=x", "expire_dans_heures": 48})
     cog, inter = Compte(FakeBot(api)), FakeInteraction()
-    await cog.reinitialiser.callback(cog, inter)
+    await lancer(cog.reinitialiser.callback(cog, inter), inter)
     assert inter.dernier.view is None and "localhost:3000/activer" in inter.dernier.texte
 
 
 # --- Membres --------------------------------------------------------------------------------
 @run_async
-async def test_points_et_alias_mypoint():
-    for nom in ("points", "mypoint"):
+async def test_points():
+    for nom in ("points",):
         cog, inter = Membres(FakeBot(FakeApi(membre=MEMBRE))), FakeInteraction()
-        await getattr(cog, nom).callback(cog, inter)
+        await lancer(getattr(cog, nom).callback(cog, inter), inter)
         t = inter.dernier.texte
         assert "7,5 points" in t and "#3" in t and "12 pts" in t and inter.dernier.ephemeral
 
@@ -88,14 +88,14 @@ async def test_points_et_alias_mypoint():
 @run_async
 async def test_points_sans_compte_lie():
     cog, inter = Membres(FakeBot(FakeApi(membre=NON_LIE))), FakeInteraction()
-    await cog.points.callback(cog, inter)
+    await lancer(cog.points.callback(cog, inter), inter)
     assert "/register" in inter.dernier.texte and "/lier" in inter.dernier.texte
 
 
 @run_async
 async def test_api_injoignable():
     cog, inter = Membres(FakeBot(FakeApi(membre=ApiError(0, "Le site Arcanix est injoignable")))), FakeInteraction()
-    await cog.points.callback(cog, inter)
+    await lancer(cog.points.callback(cog, inter), inter)
     assert "injoignable" in inter.dernier.texte
 
 
@@ -103,13 +103,13 @@ async def test_api_injoignable():
 async def test_profil_d_un_autre_membre():
     api = FakeApi(membre=MEMBRE)
     cog, inter = Membres(FakeBot(api)), FakeInteraction()
-    await cog.profil.callback(cog, inter, membre=FakeUser(id=7, display_name="Jules"))
+    await lancer(cog.profil.callback(cog, inter, membre=FakeUser(id=7, display_name="Jules")), inter)
     assert api.appels_de("membre")[0][0] == (7,)
     assert "Jules F." in inter.dernier.texte  # nom abrégé
 
     api.reponses["membre"] = NON_LIE
     inter = FakeInteraction()
-    await cog.profil.callback(cog, inter, membre=FakeUser(id=7, display_name="Jules"))
+    await lancer(cog.profil.callback(cog, inter, membre=FakeUser(id=7, display_name="Jules")), inter)
     assert "Jules n'a pas lié" in inter.dernier.texte
 
 
@@ -118,7 +118,7 @@ async def test_classement_public_avec_ma_position():
     lignes = [{"rang": i, "prenom": f"P{i}", "nom": "X.", "points": 10 - i} for i in range(1, 5)]
     api = FakeApi(classement={"semestre": SEMESTRE, "lignes": lignes}, membre=MEMBRE)
     cog, inter = Membres(FakeBot(api)), FakeInteraction()
-    await cog.classement.callback(cog, inter, semestre=None)
+    await lancer(cog.classement.callback(cog, inter, semestre=None), inter)
     msg = inter.dernier
     assert not msg.ephemeral  # visible par tout le salon
     assert "🥇 **P1 X.** — 9 pts" in msg.texte and "`# 4`" in msg.texte
@@ -128,7 +128,7 @@ async def test_classement_public_avec_ma_position():
 @run_async
 async def test_classement_vide():
     cog, inter = Membres(FakeBot(FakeApi(classement={"semestre": SEMESTRE, "lignes": []}))), FakeInteraction()
-    await cog.classement.callback(cog, inter, semestre=None)
+    await lancer(cog.classement.callback(cog, inter, semestre=None), inter)
     assert "Aucune présence" in inter.dernier.texte
 
 
@@ -148,17 +148,17 @@ async def test_seances_et_historique():
     ])
     cog = Membres(FakeBot(api))
     inter = FakeInteraction()
-    await cog.seances.callback(cog, inter)
+    await lancer(cog.seances.callback(cog, inter), inter)
     assert "Draft Magic" in inter.dernier.texte and "18h30" in inter.dernier.texte and "Mercredi 14 octobre" in inter.dernier.texte
     inter = FakeInteraction()
-    await cog.historique.callback(cog, inter)
+    await lancer(cog.historique.callback(cog, inter), inter)
     assert "✅ **Draft Magic**" in inter.dernier.texte and "❌ **Tournoi**" in inter.dernier.texte and "absent" in inter.dernier.texte
 
 
 @run_async
 async def test_aucune_seance_a_venir():
     cog, inter = Membres(FakeBot(FakeApi(seances_a_venir=[]))), FakeInteraction()
-    await cog.seances.callback(cog, inter)
+    await lancer(cog.seances.callback(cog, inter), inter)
     assert "Rien de prévu" in inter.dernier.texte
 
 
@@ -168,12 +168,12 @@ async def test_mod_seance_formulaire_et_creation():
     api = FakeApi(creer_seance=SEANCE)
     cog, inter = Moderation(FakeBot(api)), FakeInteraction()
     jeu = discord.app_commands.Choice(name="Magic", value="magic")
-    await cog.seance.callback(cog, inter, jeu=jeu)
+    await lancer(cog.seance.callback(cog, inter, jeu=jeu), inter)
     modal = inter.response.modal
     assert isinstance(modal, SeanceModal) and modal.jeu == "magic"
 
     inter = FakeInteraction()
-    await remplir(modal, nom="Draft Magic", jour="14/10/2026", heure="18h30", lieu="", points="2,5").on_submit(inter)
+    await lancer(remplir(modal, nom="Draft Magic", jour="14/10/2026", heure="18h30", lieu="", points="2,5").on_submit(inter), inter)
     (args, kwargs), = api.appels_de("creer_seance")
     assert args == (100,) and kwargs == {"nom": "Draft Magic", "date_seance": "2026-10-14", "heure_debut": "18:30",
                                          "lieu": None, "jeu": "magic", "nb_point": 2.5}
@@ -184,29 +184,29 @@ async def test_mod_seance_formulaire_et_creation():
 async def test_mod_seance_saisie_invalide_ou_refusee():
     api = FakeApi(creer_seance=ApiError(403, "Commande réservée à la modération"))
     inter = FakeInteraction()
-    await remplir(SeanceModal(FakeBot(api), None), nom="X", jour="32/13/2026", heure="", lieu="", points="1").on_submit(inter)
+    await lancer(remplir(SeanceModal(FakeBot(api), None), nom="X", jour="32/13/2026", heure="", lieu="", points="1").on_submit(inter), inter)
     assert "invalides" in inter.dernier.texte and not api.appels
     inter = FakeInteraction()
-    await remplir(SeanceModal(FakeBot(api), None), nom="X", jour="01/12/2026", heure="", lieu="", points="1").on_submit(inter)
+    await lancer(remplir(SeanceModal(FakeBot(api), None), nom="X", jour="01/12/2026", heure="", lieu="", points="1").on_submit(inter), inter)
     assert "réservée à la modération" in inter.dernier.texte
 
 
 @run_async
 async def test_mod_presence_refusee_aux_membres():
     cog, inter = Moderation(FakeBot(FakeApi(membre=MEMBRE))), FakeInteraction()
-    await cog.presence.callback(cog, inter, seance=9)
+    await lancer(cog.presence.callback(cog, inter, seance=9), inter)
     assert "réservée à la modération" in inter.dernier.texte
 
 
 @run_async
 async def test_mod_presence_parcours_complet():
-    api = FakeApi(membre=MODO, seances_recherche=[SEANCE], presences={
+    api = FakeApi(membre=MODO, seances_recherche=[SEANCE], seance=SEANCE, presences={
         "seance": {**SEANCE, "nb_presents": 2}, "ajoutes": ["7", "8"], "deja_presents": [], "non_lies": ["99"],
     })
     cog, inter = Moderation(FakeBot(api)), FakeInteraction()
     choix = await cog._seance_autocomplete(inter, "dra")
     assert choix[0].value == 9 and "Draft Magic" in choix[0].name
-    await cog.presence.callback(cog, inter, seance=9)
+    await lancer(cog.presence.callback(cog, inter, seance=9), inter)
     view = inter.dernier.view
     assert isinstance(view, PresenceView) and "Appel · Draft Magic" in inter.dernier.texte
 
@@ -215,16 +215,18 @@ async def test_mod_presence_parcours_complet():
 
     # Valider sans sélection
     clic = FakeInteraction()
-    await view.valider.callback(clic)
+    await lancer(view.valider.callback(clic), clic)
     assert "au moins un membre" in clic.dernier.texte
 
     view.selection = [FakeUser(id=7), FakeUser(id=8), FakeUser(id=99)]
     clic = FakeInteraction()
-    await view.valider.callback(clic)
+    await lancer(view.valider.callback(clic), clic)
     assert api.appels_de("presences")[0][0] == (9, 100, [7, 8, 99])
     resultat = clic.dernier
     assert resultat.canal == "edition" and "<@7>, <@8>" in resultat.texte and "<@99>" in resultat.texte
-    assert view.selection == []
+    # Nouvelle vue vierge pour continuer l'appel (l'ancienne est arrêtée)
+    assert isinstance(resultat.view, PresenceView) and resultat.view is not view and resultat.view.selection == []
+    assert view.is_finished()
 
 
 # --- Annonces --------------------------------------------------------------------------------
@@ -271,7 +273,7 @@ async def test_bouton_je_viens_met_a_jour_l_annonce():
     assert {f.name: f.value for f in annonce.embeds[0].fields}["👥 Inscrits"] == "1/2"
 
     inter = FakeInteraction(FakeUser(id=7), client=bot, message=annonce)
-    await BoutonInscription("in", 9).callback(inter)
+    await lancer(BoutonInscription("in", 9).callback(inter), inter)
     assert api.appels_de("inscription_seance")[0][0] == (9, 7, "in")
     assert "inscrit·e" in inter.dernier.texte and inter.dernier.ephemeral
     assert {f.name: f.value for f in annonce.embeds[0].fields}["👥 Inscrits"] == "2/2 · complet"
@@ -282,12 +284,12 @@ async def test_bouton_liste_d_attente_puis_promotion_en_mp():
     api = FakeApi(inscription_seance={"statut": "attente", "seance": {**SEANCE, "places_max": 1, "nb_inscrits": 1, "nb_attente": 1}, "promus": []})
     bot = FakeBot(api)
     inter = FakeInteraction(client=bot, message=FakeMessage(emb.seance_embed(SEANCE, "x")))
-    await BoutonInscription("in", 9).callback(inter)
+    await lancer(BoutonInscription("in", 9).callback(inter), inter)
     assert "Liste d'attente" in inter.dernier.texte
 
     api.reponses["inscription_seance"] = {"statut": None, "seance": {**SEANCE, "places_max": 1, "nb_inscrits": 1}, "promus": ["55"]}
     inter = FakeInteraction(client=bot, message=FakeMessage(emb.seance_embed(SEANCE, "x")))
-    await BoutonInscription("out", 9).callback(inter)
+    await lancer(BoutonInscription("out", 9).callback(inter), inter)
     assert "Désinscription" in inter.dernier.texte
     assert "place s'est libérée" in bot.mp[55][0].title
 
@@ -296,7 +298,7 @@ async def test_bouton_liste_d_attente_puis_promotion_en_mp():
 async def test_bouton_sans_compte_lie():
     bot = FakeBot(FakeApi(inscription_seance=NON_LIE))
     inter = FakeInteraction(client=bot, message=FakeMessage())
-    await BoutonInscription("in", 9).callback(inter)
+    await lancer(BoutonInscription("in", 9).callback(inter), inter)
     assert "/register" in inter.dernier.texte
 
 
@@ -315,11 +317,11 @@ async def test_mod_points_bonus_et_malus():
     cog, inter = Moderation(FakeBot(api)), FakeInteraction()
     cible = FakeUser(id=7)
     cible.mention = "<@7>"
-    await cog.points.callback(cog, inter, membre=cible, points=-1.5, motif=" Retard ", categorie=None)
+    await lancer(cog.points.callback(cog, inter, membre=cible, points=-1.5, motif=" Retard ", categorie=None), inter)
     assert api.appels_de("ajustement")[0][0] == (100, 7, -1.5, "Retard", "autre")
     assert "-1,5 pts" in inter.dernier.texte
     inter = FakeInteraction()
-    await cog.points.callback(cog, inter, membre=cible, points=0, motif="rien", categorie=None)
+    await lancer(cog.points.callback(cog, inter, membre=cible, points=0, motif="rien", categorie=None), inter)
     assert "différents de 0" in inter.dernier.texte
 
 
@@ -424,3 +426,103 @@ async def test_sync_sur_le_serveur_supprime_les_commandes_globales(monkeypatch):
     assert global_ is None and cmds_globales == []  # plus aucune commande globale
     register = b.tree.get_command("register", guild=discord.Object(id=42))
     assert register.parameters == []  # /register = formulaire uniquement, aucun champ à remplir avant
+
+
+
+# --- Non-régression : le membre reçoit TOUJOURS une réponse ---------------------------------------------
+from utils.embeds import adresse_publique  # noqa: E402
+
+
+def test_adresse_publique():
+    assert adresse_publique("https://arcanix.fr/activer?jeton=x")
+    assert adresse_publique("http://tcg.esgi.fr")
+    for url in ("http://localhost:3000/activer", "http://192.168.1.20:3000", "https://arcanix.local",
+                "http://intranet", "ftp://arcanix.fr", "localhost:3000/x", ""):
+        assert not adresse_publique(url), url
+
+
+@run_async
+async def test_register_avec_frontend_local_ne_bloque_pas():
+    """Régression : FRONTEND_URL=localhost -> Discord refusait le bouton et le bot restait « réfléchit… »."""
+    api = FakeApi(inscription={"url": "http://localhost:3000/activer?jeton=abc", "expire_dans_heures": 48})
+    inter = FakeInteraction()
+    modal = remplir(InscriptionModal(FakeBot(api)), prenom="Max", nom="G", email="m@g.fr", classe="5A")
+    await lancer(modal.on_submit(inter), inter)
+    msg = inter.dernier
+    assert msg.view is None and "http://localhost:3000/activer?jeton=abc" in msg.texte and "Bienvenue" in msg.texte
+
+
+@run_async
+async def test_bouton_refuse_par_discord_lien_en_texte():
+    api = FakeApi(reinitialiser={"url": "https://arcanix.example/activer?jeton=z", "expire_dans_heures": 48})
+    cog, inter = Compte(FakeBot(api)), FakeInteraction()
+    inter.refuser_liens = True
+    await lancer(cog.reinitialiser.callback(cog, inter), inter)
+    assert inter.dernier.view is None and "https://arcanix.example/activer?jeton=z" in inter.dernier.texte
+
+
+@run_async
+async def test_erreur_inattendue_dans_un_formulaire_est_signalee():
+    def plante(*a, **k):
+        raise RuntimeError("boum")
+    inter = FakeInteraction()
+    modal = remplir(InscriptionModal(FakeBot(FakeApi(inscription=plante))), prenom="a", nom="b", email="c@d.fr", classe="e")
+    try:
+        await modal.on_submit(inter)
+    except RuntimeError as e:
+        await modal.on_error(inter, e)  # ce que discord.py appelle en vrai
+    assert "erreur inattendue" in inter.dernier.texte
+
+
+@run_async
+async def test_erreur_inattendue_dans_un_bouton_est_signalee():
+    def plante(*a, **k):
+        raise RuntimeError("boum")
+    inter = FakeInteraction(client=FakeBot(FakeApi(inscription_seance=plante)), message=FakeMessage())
+    await BoutonInscription("in", 9).callback(inter)  # sans lancer() : le bouton gère seul ses erreurs
+    assert "erreur inattendue" in inter.dernier.texte
+
+
+@run_async
+async def test_mod_presence_seance_introuvable():
+    from utils.api import ApiError as E
+    cog, inter = Moderation(FakeBot(FakeApi(membre=MODO, seance=E(404, "Séance introuvable")))), FakeInteraction()
+    await lancer(cog.presence.callback(cog, inter, seance=12345), inter)
+    assert "choisis-la dans la liste" in inter.dernier.texte
+
+
+@run_async
+async def test_nettoyage_des_commandes_en_double_sur_les_autres_serveurs(monkeypatch):
+    import bot as botmod
+    import config
+    from types import SimpleNamespace
+    monkeypatch.setattr(config, "GUILD_ID", 1)
+    b = botmod.ArcanixBot()
+    serveurs = [SimpleNamespace(id=1, name="Asso"), SimpleNamespace(id=2, name="Ancien serveur de test")]
+    monkeypatch.setattr(type(b), "guilds", property(lambda self: serveurs))
+    restantes = {1: ["register", "points"], 2: ["register"]}
+    nettoyes = []
+
+    async def fetch(*, guild):
+        return restantes[guild.id]
+
+    async def sync(*, guild=None):
+        nettoyes.append(guild.id)
+        restantes[guild.id] = []
+    monkeypatch.setattr(b.tree, "fetch_commands", fetch)
+    monkeypatch.setattr(b.tree, "sync", sync)
+    await b.nettoyer_commandes_serveurs()
+    assert nettoyes == [2] and restantes == {1: ["register", "points"], 2: []}
+
+
+def test_plus_de_commande_mypoint():
+    import asyncio
+    import bot as botmod
+
+    async def _run():
+        b = botmod.ArcanixBot()
+        for ext in botmod.EXTENSIONS:
+            await b.load_extension(ext)
+        return sorted(c.name for c in b.tree.get_commands())
+    noms = asyncio.run(_run())
+    assert noms == ["classement", "historique", "lier", "mod", "points", "profil", "register", "reinitialiser", "seances"]

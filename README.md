@@ -14,7 +14,7 @@ Séances, présences, points et classement de l'association, avec un site web et
 
 ```bash
 cp .env.example .env        # puis remplir : guide détaillé dans docs/CONFIGURATION.md
-docker compose up -d --build
+docker compose up -d --build --remove-orphans   # --remove-orphans arrête les conteneurs de l'ancienne version
 ```
 
 - Site : http://localhost:3000 — API : http://localhost:8000 (doc interactive sur `/docs`)
@@ -106,7 +106,7 @@ de l'ancienne version serait aussi reconnue et migrée sans perte (voir `0002_re
 | `/register` | Formulaire d'inscription → lien privé pour choisir son mot de passe |
 | `/lier code` | Lie un compte créé sur le site (code généré sur la page Profil) |
 | `/reinitialiser` | Nouveau lien de mot de passe |
-| `/points` (`/mypoint`) | Points, rang et présences du semestre en cours |
+| `/points` | Points, rang et présences du semestre en cours |
 | `/profil [membre]`, `/historique` | Fiche d'un membre, 10 dernières séances |
 | `/classement [semestre]` | Top 10 (public) + ta position |
 | `/seances` | Prochaines séances |

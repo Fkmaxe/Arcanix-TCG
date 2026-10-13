@@ -1,5 +1,7 @@
 """Mise en forme des messages aux couleurs d'Arcanix (or, braise, obsidienne)."""
+import ipaddress
 from datetime import date
+from urllib.parse import urlparse
 
 import discord
 
@@ -20,18 +22,37 @@ MOIS = ["janvier", "février", "mars", "avril", "mai", "juin", "juillet", "août
         "octobre", "novembre", "décembre"]
 
 
+def adresse_publique(url: str) -> bool:
+    """Vrai pour une URL http(s) avec un nom de domaine (ni localhost, ni IP, ni .local).
+
+    Discord refuse les boutons-liens vers ces adresses, et elles seraient de toute façon
+    inaccessibles depuis le téléphone d'un membre.
+    """
+    try:
+        p = urlparse(url)
+    except ValueError:
+        return False
+    hote = (p.hostname or "").lower()
+    if p.scheme not in ("http", "https") or "." not in hote or hote.endswith((".local", ".localhost", ".internal")):
+        return False
+    try:
+        ipaddress.ip_address(hote)
+        return False  # adresse IP brute
+    except ValueError:
+        return True
+
+
 def logo_url() -> str | None:
-    # Discord ne peut afficher que des images publiques (https)
-    return f"{config.FRONTEND_URL}/brand/carte-192.png" if config.FRONTEND_URL.startswith("https://") else None
+    # Discord ne peut afficher que des images publiques en https
+    url = f"{config.FRONTEND_URL}/brand/carte-192.png"
+    return url if url.startswith("https://") and adresse_publique(url) else None
 
 
 def site_url(path: str = "") -> str:
     return f"{config.FRONTEND_URL}{path}"
 
 
-def lien_valide(url: str) -> bool:
-    """Les boutons-liens Discord exigent une URL http(s) publique."""
-    return url.startswith("https://") or url.startswith("http://")
+lien_valide = adresse_publique  # nom historique
 
 
 def embed(title: str, description: str | None = None, color: int = OR, thumbnail: bool = True) -> discord.Embed:
