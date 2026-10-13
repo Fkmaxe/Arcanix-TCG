@@ -64,7 +64,7 @@ Génère une valeur **différente** pour chaque variable secrète.
 | `CORS_ORIGINS` | **oui en prod** | `https://arcanix.fr` | API |
 | `FRONTEND_URL` | **oui en prod** | `https://arcanix.fr` | API, bot |
 | `DEBUG` | non (défaut `false`) | `false` | API |
-| `FORWARDED_ALLOW_IPS` | **oui derrière Nginx** | `51.75.10.20` | API |
+| `FORWARDED_ALLOW_IPS` | **oui derrière Nginx** | `192.168.1.10` (IP de la VM Nginx) | API |
 | `NEXT_PUBLIC_API_BASE` | **oui en prod** | `https://api.arcanix.fr` | site (au build) |
 | `NEXT_PUBLIC_SITE_URL` | **oui en prod** | `https://arcanix.fr` | site (au build) |
 | `SMTP_HOST` | non (vide = pas d'emails) | `smtp-relay.brevo.com` | API |
@@ -152,16 +152,35 @@ Indications :
 - `true` sert uniquement en développement : l'API accepte un `JWT_SECRET` vide (secret temporaire) et affiche des journaux plus bavards.
 
 ### `FORWARDED_ALLOW_IPS` — obligatoire derrière ton Nginx
-Ton Nginx est sur un autre serveur : c'est lui qui contacte l'API, et l'API voit donc l'**IP du Nginx** pour tous les visiteurs. Cette variable indique à l'API qu'elle peut faire confiance à l'en-tête `X-Forwarded-For` envoyé par ce Nginx pour retrouver la vraie IP du visiteur.
 
-- **Valeur** : l'adresse IP du serveur Nginx **telle que le serveur Docker la voit**.
-  - Si les deux serveurs se parlent par Internet : l'IP publique du serveur Nginx, par exemple `51.75.10.20`.
-  - S'ils sont sur un réseau privé ou un VPN : l'IP privée, par exemple `10.0.0.5`.
-  - Plusieurs IP : séparées par des virgules.
-- **Ne mets pas `*`** : n'importe qui pourrait alors se faire passer pour une autre IP.
-- **Pourquoi c'est important** : après 10 échecs en un quart d'heure pour un même couple *IP + email*, la connexion à ce compte est bloquée. Avec une mauvaise valeur, tous les visiteurs ont la même IP (celle du Nginx) : n'importe qui peut alors bloquer le compte d'un membre en tapant de faux mots de passe sur son email, et le membre est bloqué même depuis son propre téléphone.
-- **Vérifier** : après une connexion sur le site, lance `docker compose logs api --tail 20`. Les lignes `POST /auth/login` doivent afficher l'IP de ton téléphone ou de ta box, pas celle du Nginx.
-- Côté Nginx, il faut `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;` (déjà présent dans [nginx-arcanix.conf](nginx-arcanix.conf)).
+**Ton installation** : Nginx tourne sur **une VM**, et le site, l'API, le bot et la base sur **une autre VM** (celle de Docker), les deux sur le même réseau local.
+
+```
+Internet ──► VM Nginx (ex. 192.168.1.10) ──► VM Docker (ex. 192.168.1.20) : site :3000, API :8000, bot, base
+```
+
+C'est Nginx qui contacte l'API : sans réglage, l'API croit que **tous les visiteurs ont l'IP de la VM Nginx**. Cette variable lui dit de faire confiance à l'en-tête `X-Forwarded-For` que Nginx ajoute, pour retrouver la vraie IP du visiteur.
+
+- **Valeur** : l'**IP locale de la VM Nginx**, celle qui arrive sur la VM Docker. Avec l'exemple ci-dessus : `FORWARDED_ALLOW_IPS=192.168.1.10`.
+- ❌ **Pas** l'IP de la VM Docker, ni `127.0.0.1`, ni `*`. Avec `*`, n'importe quelle machine du réseau pourrait se faire passer pour une autre IP.
+- **Le bot n'est pas concerné** : il parle à l'API directement par le réseau interne Docker (`http://api:8000`), sans passer par Nginx.
+- **Pourquoi c'est important** : après 10 échecs en un quart d'heure pour un même couple *IP + email*, la connexion à ce compte est bloquée. Avec une mauvaise valeur, tous les visiteurs ont l'IP du Nginx : n'importe qui peut alors bloquer le compte d'un membre en tapant de faux mots de passe sur son email, et le membre est bloqué même depuis son propre téléphone.
+
+**Trouver la bonne IP à coup sûr** (rien à deviner) :
+1. Laisse `FORWARDED_ALLOW_IPS` vide et lance la stack.
+2. Ouvre le site **via Nginx** (adresse publique), puis connecte-toi.
+3. Sur la VM Docker, lance `docker compose logs api --tail 10`. Les lignes ressemblent à `INFO: 192.168.1.10:51234 - "POST /auth/login HTTP/1.1" 200`.
+4. L'IP au début de la ligne (`192.168.1.10`) est celle à mettre dans `FORWARDED_ALLOW_IPS`.
+5. Applique le changement avec `docker compose up -d api` et refais une connexion : les logs affichent maintenant l'IP de ton téléphone ou de ta box, et non plus celle de la VM Nginx. C'est réglé.
+
+**Côté Nginx** : il faut `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`, déjà présent dans [nginx-arcanix.conf](nginx-arcanix.conf). Les `proxy_pass` pointent vers l'IP locale de la VM Docker, par exemple `http://192.168.1.20:8000`.
+
+**Recommandé** : sur la VM Docker, n'autorise les ports 3000 et 8000 **que depuis la VM Nginx**. Personne ne peut ainsi contourner Nginx, ni le HTTPS. Par exemple avec `ufw` :
+```bash
+sudo ufw allow from 192.168.1.10 to any port 3000,8000 proto tcp
+sudo ufw deny 3000,8000/tcp
+```
+Attention : Docker publie ses ports en contournant `ufw` par défaut. Pour un vrai filtrage, publie plutôt les ports sur l'IP locale de la VM Docker (`"192.168.1.20:8000:8000"` dans `docker-compose.yml`), ou filtre au niveau de l'hyperviseur ou du routeur.
 
 ---
 
@@ -362,7 +381,7 @@ Facultatifs : les valeurs par défaut conviennent dans la plupart des cas. Ajout
 
 ## 9. Exemples complets
 
-### Production (site `arcanix.fr`, API `api.arcanix.fr`, Nginx en `51.75.10.20`)
+### Production (site `arcanix.fr`, API `api.arcanix.fr`, VM Nginx `192.168.1.10`, VM Docker `192.168.1.20`)
 
 ```dotenv
 # --- Base de données ---
@@ -376,7 +395,7 @@ JWT_EXPIRE_DAYS=7
 CORS_ORIGINS=https://arcanix.fr
 FRONTEND_URL=https://arcanix.fr
 DEBUG=false
-FORWARDED_ALLOW_IPS=51.75.10.20
+FORWARDED_ALLOW_IPS=192.168.1.10
 
 # --- Site (figé au build) ---
 NEXT_PUBLIC_API_BASE=https://api.arcanix.fr

@@ -51,7 +51,7 @@ En développement, `docker-compose.dev.yml` démarre **Mailpit** : les emails so
 Voir [docs/nginx-arcanix.conf](docs/nginx-arcanix.conf). Points à ne pas oublier :
 - `NEXT_PUBLIC_API_BASE` = URL publique de l'API (le navigateur l'appelle directement), `FRONTEND_URL` et
   `CORS_ORIGINS` = URL publique du site ;
-- `FORWARDED_ALLOW_IPS` = IP du serveur Nginx, sinon la limitation des tentatives de connexion verra
+- `FORWARDED_ALLOW_IPS` = IP locale de la **VM Nginx** (pas celle de la VM Docker), sinon la limitation des tentatives de connexion verra
   l'IP de Nginx pour tout le monde ;
 - n'exposer les ports 3000/8000 du serveur Docker qu'au serveur Nginx (pare-feu).
 
