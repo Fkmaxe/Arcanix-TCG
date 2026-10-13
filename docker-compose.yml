@@ -43,6 +43,11 @@ services:
       SMTP_SECURITE: ${SMTP_SECURITE:-starttls}
       # IP du Nginx externe : l'API lit alors la vraie IP des visiteurs (X-Forwarded-For)
       FORWARDED_ALLOW_IPS: ${FORWARDED_ALLOW_IPS:-127.0.0.1}
+      # Réglages avancés (valeurs par défaut adaptées dans la plupart des cas)
+      JETON_MDP_HEURES: ${JETON_MDP_HEURES:-48}
+      JETON_DISCORD_MINUTES: ${JETON_DISCORD_MINUTES:-15}
+      QR_PERIODE_S: ${QR_PERIODE_S:-30}
+      POINTAGE_DUREE_H: ${POINTAGE_DUREE_H:-4}
     ports:
       - "8000:8000"
 
@@ -76,6 +81,8 @@ services:
       DISCORD_ROLE_MEMBRE_ID: ${DISCORD_ROLE_MEMBRE_ID:-}
       DISCORD_ROLE_TOP3_ID: ${DISCORD_ROLE_TOP3_ID:-}
       DISCORD_SYNC_ROLES: ${DISCORD_SYNC_ROLES:-false}
+      ANNONCES_INTERVALLE_MIN: ${ANNONCES_INTERVALLE_MIN:-5}
+      ROLES_INTERVALLE_MIN: ${ROLES_INTERVALLE_MIN:-15}
 
 volumes:
   postgres_data:

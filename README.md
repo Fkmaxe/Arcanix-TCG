@@ -13,7 +13,7 @@ Séances, présences, points et classement de l'association, avec un site web et
 ## Démarrage rapide
 
 ```bash
-cp .env.example .env        # puis remplir (voir les commentaires)
+cp .env.example .env        # puis remplir : guide détaillé dans docs/CONFIGURATION.md
 docker compose up -d --build
 ```
 
