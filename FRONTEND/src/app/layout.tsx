@@ -1,13 +1,14 @@
 // src/app/layout.tsx
 import type { Metadata, Viewport } from "next";
-import { Cinzel, Inter } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 import Providers from "@/components/providers/Providers";
 import AppShell from "@/components/layout/AppShell";
 import { Toaster } from "@/components/ui/sonner";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
-const cinzel = Cinzel({ subsets: ["latin"], weight: ["500", "600", "700"], variable: "--font-cinzel", display: "swap" });
+// Polices embarquées (src/app/fonts) : le build ne dépend pas de Google Fonts
+const inter = localFont({ src: "./fonts/inter-variable-latin.woff2", weight: "100 900", variable: "--font-inter", display: "swap" });
+const cinzel = localFont({ src: "./fonts/cinzel-variable-latin.woff2", weight: "400 900", variable: "--font-cinzel", display: "swap" });
 
 export const metadata: Metadata = {
     metadataBase: new URL(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"),
