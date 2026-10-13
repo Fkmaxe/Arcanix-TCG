@@ -168,10 +168,10 @@ export default function ProfilPage() {
             />
 
             <div className="grid gap-4 sm:grid-cols-3">
-                <OrnateCard className="sm:col-span-1" corners={false}>
+                <OrnateCard className="flex flex-col sm:col-span-1 [&>div]:flex [&>div]:flex-1 [&>div]:flex-col" corners={false}>
                     <p className="text-muted-foreground text-xs font-semibold tracking-[0.2em] uppercase">Total cumulé</p>
                     <p className="font-display text-gilded mt-1 text-5xl font-bold tabular-nums">{formatPoints(points?.total ?? 0)}</p>
-                    <ul className="mt-4 space-y-1 text-sm">
+                    <ul className="mt-4 mb-4 space-y-1 text-sm">
                         {points?.semestres.map((s) => (
                             <li key={s.semestre_id} className="flex justify-between">
                                 <span className="text-muted-foreground">{semestreLabel(s)}</span>
@@ -179,6 +179,18 @@ export default function ProfilPage() {
                             </li>
                         ))}
                     </ul>
+                    {stats?.semestre && (
+                        <div className="mt-auto grid grid-cols-2 gap-3 border-t pt-4">
+                            <div>
+                                <p className="text-muted-foreground text-xs uppercase">Présences</p>
+                                <p className="font-display text-2xl font-bold">{stats.presences}<span className="text-muted-foreground text-sm font-normal">/{stats.seances_semestre}</span></p>
+                            </div>
+                            <div>
+                                <p className="text-muted-foreground text-xs uppercase">Assiduité</p>
+                                <p className="font-display text-2xl font-bold">{Math.round(stats.taux_presence * 100)}%</p>
+                            </div>
+                        </div>
+                    )}
                 </OrnateCard>
                 <Card className="sm:col-span-2">
                     <CardHeader className="flex flex-row flex-wrap items-center justify-between gap-2">

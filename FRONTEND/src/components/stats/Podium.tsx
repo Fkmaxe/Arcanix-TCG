@@ -5,8 +5,8 @@ import { cn } from "@/lib/utils";
 
 const STYLES = {
     1: { h: "h-28 sm:h-36", ring: "from-[#ffe7a3] via-[#f5c24b] to-[#b8860b]", label: "text-gold" },
-    2: { h: "h-20 sm:h-28", ring: "from-[#f1f1f1] via-[#c0c0c0] to-[#8a8a8a]", label: "text-[#c9c9c9]" },
-    3: { h: "h-16 sm:h-20", ring: "from-[#f0b27a] via-[#cd7f32] to-[#8b4513]", label: "text-[#d9925a]" },
+    2: { h: "h-20 sm:h-28", ring: "from-[#f1f1f1] via-[#c0c0c0] to-[#8a8a8a]", label: "text-[#6f6f6f] dark:text-[#c9c9c9]" },
+    3: { h: "h-16 sm:h-20", ring: "from-[#f0b27a] via-[#cd7f32] to-[#8b4513]", label: "text-[#9a5420] dark:text-[#d9925a]" },
 } as const;
 
 function Marche({ ligne, place }: { ligne?: LigneClassement; place: 1 | 2 | 3 }) {

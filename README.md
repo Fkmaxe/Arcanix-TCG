@@ -37,6 +37,13 @@ docker compose exec db pg_dump -U admin pointsdb > sauvegarde_$(date +%F).sql
 
 Si deux comptes ont le même email à la casse près, la migration s'arrête et liste les emails à fusionner.
 
+## Sécurité
+
+- Sessions JWT signées par `JWT_SECRET`, valables `JWT_EXPIRE_DAYS` jours.
+- Connexion limitée à 10 échecs par quart d'heure (par IP et email), réponse 429 au-delà.
+- Liens de mot de passe et codes Discord à usage unique, stockés hachés, avec expiration.
+- Routes du bot protégées par le secret partagé `DISCORD_BOT_TOKEN`.
+
 ## Rôles
 
 | Rôle | Peut… |
@@ -76,6 +83,8 @@ quand un admin définit un nouveau « semestre en cours ».
 ```bash
 # API (Postgres requis ; la base de test est recréée)
 docker compose run --rm -e TEST_DATABASE_URL=postgresql+psycopg://admin:<mdp>@db:5432/arcanix_test api pytest -q
+# Bot (fonctions pures : dates, mise en forme des annonces)
+cd BOT_DISCORD && pip install -r requirements-dev.txt && python -m pytest -q
 # Frontend
 cd FRONTEND && npm ci && npx tsc --noEmit && npm run lint && npm run build
 ```

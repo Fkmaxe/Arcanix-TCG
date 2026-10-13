@@ -205,3 +205,14 @@ def test_annonces_nouvelle_seance_et_rappel(client, make_user):
     client.post("/discord/annonces/ack", headers=BOT, json=[{"type": "nouvelle_seance", "id": s["id"]}])
     # annoncée la veille : pas de rappel en double
     assert client.get("/discord/annonces/en-attente", headers=BOT).json() == []
+
+
+def test_limitation_des_tentatives_de_connexion(client, make_user):
+    make_user(email="cible@ex.com", password="bon-mot-de-passe")
+    for _ in range(10):
+        assert client.post("/auth/login", json={"email": "cible@ex.com", "password": "faux"}).status_code == 401
+    r = client.post("/auth/login", json={"email": "cible@ex.com", "password": "bon-mot-de-passe"})
+    assert r.status_code == 429 and "Retry-After" in r.headers
+    # un autre compte n'est pas bloqué
+    make_user(email="autre@ex.com", password="bon-mot-de-passe")
+    assert client.post("/auth/login", json={"email": "autre@ex.com", "password": "bon-mot-de-passe"}).status_code == 200

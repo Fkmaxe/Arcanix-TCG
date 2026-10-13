@@ -40,6 +40,8 @@ migrate.main()  # installation neuve : toutes les migrations depuis zéro
 
 @pytest.fixture(autouse=True)
 def base_vide():
+    from app.ratelimit import connexion
+    connexion.reset()
     with engine.begin() as c:
         c.execute(text("TRUNCATE participation, seance, semestre, jeton, utilisateur RESTART IDENTITY CASCADE"))
     yield

@@ -122,9 +122,12 @@ export function AppelPresence({ seance, onSaved }: { seance: SeanceDetail; onSav
                     <strong className="text-destructive">{etats.size - presents}</strong> absent{etats.size - presents > 1 ? "s" : ""}
                 </span>
                 <div className="flex gap-1">
-                    <Button variant="ghost" size="sm" onClick={tousPresents} disabled={!membres.length}>
-                        <CheckCheck /> Tous présents
-                    </Button>
+                    {/* Jamais sur l'annuaire complet : seulement les inscrits ou le résultat d'une recherche */}
+                    {(filtre === "inscrits" || q) && (
+                        <Button variant="ghost" size="sm" onClick={tousPresents} disabled={!membres.length}>
+                            <CheckCheck /> {q ? "Cocher la sélection" : "Tous présents"}
+                        </Button>
+                    )}
                     {dirty && (
                         <Button variant="ghost" size="icon-sm" onClick={() => setEtats(initial)} aria-label="Annuler les modifications">
                             <RotateCcw />
