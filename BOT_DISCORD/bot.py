@@ -27,11 +27,19 @@ class ArcanixBot(commands.Bot):
         for ext in EXTENSIONS:
             await self.load_extension(ext)
         self.tree.on_error = self.on_app_command_error
+        await self.synchroniser_commandes()
+
+    async def synchroniser_commandes(self):
         if config.GUILD_ID:
             guild = discord.Object(id=config.GUILD_ID)
             self.tree.copy_global_to(guild=guild)
             synced = await self.tree.sync(guild=guild)
             log.info("🔁 %d commandes synchronisées sur le serveur %s", len(synced), config.GUILD_ID)
+            # Supprime les commandes globales (ex. l'ancien /register à 4 champs) : sinon Discord
+            # affiche chaque commande en double et l'ancienne version fait remplir les infos deux fois.
+            self.tree.clear_commands(guild=None)
+            await self.tree.sync()
+            log.info("🧹 Anciennes commandes globales supprimées")
         else:
             synced = await self.tree.sync()
             log.info("🔁 %d commandes synchronisées globalement (propagation jusqu'à 1 h)", len(synced))

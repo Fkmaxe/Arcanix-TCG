@@ -398,3 +398,29 @@ async def test_role_membre_donne_a_l_inscription(monkeypatch):
     assert await donner_role_membre(m, _Guild([m], [role])) is True
     assert await donner_role_membre(m, _Guild([m], [role])) is False  # déjà attribué
     assert await donner_role_membre(m, None) is False
+
+
+# --- Synchronisation des commandes -----------------------------------------------------------------
+@run_async
+async def test_sync_sur_le_serveur_supprime_les_commandes_globales(monkeypatch):
+    """Régression : l'ancien /register global (4 champs) restait affiché à côté du formulaire."""
+    import bot as botmod
+    import config
+    monkeypatch.setattr(config, "GUILD_ID", 42)
+    b = botmod.ArcanixBot()
+    for ext in botmod.EXTENSIONS:
+        await b.load_extension(ext)
+    appels = []
+
+    async def faux_sync(*, guild=None):
+        cmds = b.tree.get_commands(guild=guild)
+        appels.append((guild.id if guild else None, sorted(c.name for c in cmds)))
+        return cmds
+    monkeypatch.setattr(b.tree, "sync", faux_sync)
+    await b.synchroniser_commandes()
+
+    (serveur, cmds_serveur), (global_, cmds_globales) = appels
+    assert serveur == 42 and "register" in cmds_serveur and "mod" in cmds_serveur
+    assert global_ is None and cmds_globales == []  # plus aucune commande globale
+    register = b.tree.get_command("register", guild=discord.Object(id=42))
+    assert register.parameters == []  # /register = formulaire uniquement, aucun champ à remplir avant

@@ -317,6 +317,7 @@ Identifiant du **serveur Discord de l'association** (clic droit sur l'icône du 
 - **Avec** : les commandes apparaissent **immédiatement** sur ce serveur.
 - **Sans** : elles sont publiées globalement et peuvent mettre **jusqu'à une heure** à apparaître.
 - **Requis** pour la synchronisation des rôles (`DISCORD_ROLE_TOP3_ID`, `DISCORD_SYNC_ROLES`).
+- Au démarrage, le bot **supprime les commandes globales** restées de l'ancienne version (l'ancien `/register` à 4 champs). Sans ça, Discord afficherait chaque commande en double.
 
 ### `DISCORD_ANNONCES_CHANNEL_ID`
 Salon où le bot publie automatiquement, toutes les 5 minutes s'il y a du nouveau :
@@ -475,6 +476,7 @@ docker compose config
 | Les liens reçus sur Discord ou par email mènent à `localhost` | `FRONTEND_URL` non renseigné | Mettre l'adresse publique, puis `docker compose up -d api discordbot` |
 | Le bot répond « Le bot n'est pas autorisé par l'API » | `DISCORD_BOT_TOKEN` différent entre API et bot, ou un seul conteneur relancé | `docker compose up -d api discordbot` |
 | Les commandes du bot n'apparaissent pas | Pas de `DISCORD_GUILD_ID` (délai d'1 h), ou bot invité sans le scope `applications.commands` | Renseigner `DISCORD_GUILD_ID`, ou réinviter le bot (§7) |
+| Commandes en double, ou `/register` qui demande les infos avant le formulaire | Anciennes commandes globales de la première version du bot | Renseigner `DISCORD_GUILD_ID` et redémarrer le bot (elles sont supprimées au démarrage), puis recharger Discord (Ctrl+R, ou quitter et rouvrir l'appli) |
 | Le bot ne démarre pas, logs `PrivilegedIntentsRequired` | Rôle Top 3 ou synchro activés sans l'intent | Activer *Server Members Intent* (§7) |
 | Les rôles ne sont pas attribués | Permission *Gérer les rôles* manquante ou rôle du bot trop bas | Remonter le rôle du bot au-dessus des rôles gérés |
 | Aucune annonce publiée | Salon vide ou mauvais identifiant, ou bot sans accès au salon | Vérifier `DISCORD_ANNONCES_CHANNEL_ID` et les permissions du salon ; logs : `docker compose logs discordbot` |
