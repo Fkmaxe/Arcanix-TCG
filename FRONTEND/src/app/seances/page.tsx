@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import useSWR from "swr";
-import { CalendarX, Plus, Search } from "lucide-react";
+import { CalendarDays, CalendarX, List, Plus, Search } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/common/PageHeader";
 import { Pagination } from "@/components/common/DataTable";
 import { EmptyState, ErrorBox, Skeleton } from "@/components/common/States";
+import { CalendrierSeances } from "@/components/seances/CalendrierSeances";
 import SeanceForm from "@/components/seances/SeanceForm";
 import { SeanceCard } from "@/components/seances/SeanceCard";
 import { Button } from "@/components/ui/button";
@@ -29,10 +30,24 @@ export default function SeancesPage() {
     const [query, setQuery] = useState("");
     const [page, setPage] = useState(1);
     const [open, setOpen] = useState(false);
+    const [vue, setVue] = useState<"liste" | "calendrier">("liste");
     const q = useDebounced(query.trim());
 
+    // Mémorise la vue préférée (confort, sans garantie : stockage parfois indisponible)
+    useEffect(() => {
+        try {
+            if (localStorage.getItem("arcanix:vue-seances") === "calendrier") setVue("calendrier");
+        } catch {}
+    }, []);
+    const choisirVue = (v: "liste" | "calendrier") => {
+        setVue(v);
+        try {
+            localStorage.setItem("arcanix:vue-seances", v);
+        } catch {}
+    };
+
     const params = { a_venir: periode === "avenir", jeu, q, page, limit: LIMIT };
-    const { data, error, isLoading, mutate } = useSWR(["/seances", params], () => SeancesApi.list(params));
+    const { data, error, isLoading, mutate } = useSWR(vue === "liste" ? ["/seances", params] : null, () => SeancesApi.list(params));
     const reset = (fn: () => void) => { fn(); setPage(1); };
 
     return (
@@ -60,6 +75,20 @@ export default function SeancesPage() {
 
             <div className="space-y-3">
                 <div className="flex flex-col gap-2 sm:flex-row">
+                    <div className="bg-muted inline-flex h-11 shrink-0 rounded-lg p-1" role="tablist" aria-label="Affichage">
+                        {([["liste", "Liste", List], ["calendrier", "Calendrier", CalendarDays]] as const).map(([v, label, Icon]) => (
+                            <button
+                                key={v}
+                                role="tab"
+                                aria-selected={vue === v}
+                                onClick={() => choisirVue(v)}
+                                className={cn("flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 text-sm font-medium transition sm:flex-none", vue === v ? "bg-card text-gold shadow-sm" : "text-muted-foreground")}
+                            >
+                                <Icon className="size-4" /> {label}
+                            </button>
+                        ))}
+                    </div>
+                    {vue === "liste" && (
                     <div className="bg-muted inline-flex h-11 shrink-0 rounded-lg p-1" role="tablist" aria-label="Période">
                         {([["avenir", "À venir"], ["passees", "Passées"]] as const).map(([v, label]) => (
                             <button
@@ -73,10 +102,13 @@ export default function SeancesPage() {
                             </button>
                         ))}
                     </div>
+                    )}
+                    {vue === "liste" && (
                     <div className="relative flex-1">
                         <Search className="text-muted-foreground absolute top-1/2 left-3 size-4 -translate-y-1/2" />
                         <Input type="search" value={query} onChange={(e) => reset(() => setQuery(e.target.value))} placeholder="Rechercher une séance, un lieu…" className="pl-9" />
                     </div>
+                    )}
                 </div>
                 {/* Filtres par jeu : défilement horizontal sur mobile */}
                 <div className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0">
@@ -100,6 +132,10 @@ export default function SeancesPage() {
                 </div>
             </div>
 
+            {vue === "calendrier" ? (
+                <CalendrierSeances jeu={jeu} />
+            ) : (
+            <>
             {error && <ErrorBox message={errorMessage(error)} onRetry={() => mutate()} />}
             {isLoading && !data ? (
                 <div className="space-y-2">{[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-[76px]" />)}</div>
@@ -118,6 +154,8 @@ export default function SeancesPage() {
                     title={periode === "avenir" ? "Aucune séance à venir" : "Aucune séance passée"}
                     description={q || jeu ? "Essaie d'élargir ta recherche." : "Les prochaines dates seront annoncées sur le Discord."}
                 />
+            )}
+            </>
             )}
         </div>
     );

@@ -41,13 +41,14 @@ export function AppelPresence({ seance, onSaved }: { seance: SeanceDetail; onSav
         );
         annuaire.forEach((u) => parId.set(u.id, { ...parId.get(u.id), ...u, discord_lie: !!u.discord_id }));
         let liste = [...parId.values()];
-        if (filtre === "inscrits" && !q) liste = liste.filter((m) => etats.has(m.id));
+        // Les inscrits d'origine restent affichés même décochés : un mauvais tap se corrige sur place
+        if (filtre === "inscrits" && !q) liste = liste.filter((m) => etats.has(m.id) || initial.has(m.id));
         if (q) {
             const needle = q.toLowerCase();
             liste = liste.filter((m) => `${m.prenom} ${m.nom} ${m.classe}`.toLowerCase().includes(needle));
         }
         return liste.sort((a, b) => a.prenom.localeCompare(b.prenom, "fr") || a.nom.localeCompare(b.nom, "fr"));
-    }, [seance.participants, annuaire, filtre, q, etats]);
+    }, [seance.participants, annuaire, filtre, q, etats, initial]);
 
     const presents = [...etats.values()].filter((e) => e === "present").length;
     const dirty =
@@ -162,6 +163,7 @@ export function AppelPresence({ seance, onSaved }: { seance: SeanceDetail; onSav
                                 <p className="text-muted-foreground flex items-center gap-1.5 truncate text-xs">
                                     {m.classe}
                                     {m.discord_lie && <MessageCircle className="size-3" aria-label="Discord lié" />}
+                                    {!etat && initial.has(m.id) && <span className="text-destructive">· sera retiré de la séance</span>}
                                 </p>
                             </div>
                             <div className="flex shrink-0 items-center gap-1" role="group" aria-label={`Présence de ${m.prenom} ${m.nom}`}>

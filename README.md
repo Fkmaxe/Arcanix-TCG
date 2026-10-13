@@ -2,6 +2,8 @@
 
 Séances, présences, points et classement de l'association, avec un site web et un bot Discord.
 
+<p align="center"><img src="docs/parcours-mobile.gif" alt="Parcours mobile : accueil, connexion, tableau de bord, calendrier, appel, classement, profil" width="300"></p>
+
 | Dossier | Rôle | Techno |
 |---|---|---|
 | `API_TCG_ESGI/` | API REST + migrations | FastAPI, SQLAlchemy 2, Alembic, PostgreSQL 16 |

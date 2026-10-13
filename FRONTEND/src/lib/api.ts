@@ -65,6 +65,7 @@ export const SemestresApi = {
 
 export type SeancesQuery = {
     semestreId?: number; a_venir?: boolean; jeu?: string; q?: string; page?: number; limit?: number;
+    dateFrom?: string; dateTo?: string;
 };
 export const SeancesApi = {
     list: (params: SeancesQuery = {}) => fetchPage<Seance>(`/seances${qs(params)}`),

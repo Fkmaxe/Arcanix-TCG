@@ -12,6 +12,9 @@ import { ThemeToggle, UserMenu } from "./UserMenu";
 // Pages plein écran (sans barre de navigation basse)
 const BARE = ["/login", "/register", "/activer"];
 
+// Changer d'onglet ouvre toujours la page en haut
+const versLeHaut = () => window.scrollTo({ top: 0 });
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
     const pathname = usePathname() || "/";
     const { me, ready, isLoading } = useAuth();
@@ -38,6 +41,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                                 <Link
                                     key={item.href}
                                     href={item.href}
+                                    onClick={versLeHaut}
                                     aria-current={active ? "page" : undefined}
                                     className={cn(
                                         "relative rounded-md px-3 py-2 text-sm font-medium transition",
@@ -100,6 +104,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                                 <li key={item.href} className="flex-1">
                                     <Link
                                         href={item.href}
+                                        onClick={versLeHaut}
                                         aria-current={active ? "page" : undefined}
                                         className={cn(
                                             "flex min-h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-medium transition",
