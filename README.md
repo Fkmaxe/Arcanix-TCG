@@ -83,8 +83,10 @@ quand un admin définit un nouveau « semestre en cours ».
 ```bash
 # API (Postgres requis ; la base de test est recréée)
 docker compose run --rm -e TEST_DATABASE_URL=postgresql+psycopg://admin:<mdp>@db:5432/arcanix_test api pytest -q
-# Bot (fonctions pures : dates, mise en forme des annonces)
+# Bot, sans Discord : chaque commande est exécutée avec de fausses interactions
 cd BOT_DISCORD && pip install -r requirements-dev.txt && python -m pytest -q
+# Bot de bout en bout contre une vraie API (base remplie avec scripts.seed_demo)
+ARCANIX_E2E_API=http://localhost:8000 ARCANIX_E2E_BOT_TOKEN=<DISCORD_BOT_TOKEN> python -m pytest tests/test_e2e.py -v
 # Frontend
 cd FRONTEND && npm ci && npx tsc --noEmit && npm run lint && npm run build
 ```
