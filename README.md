@@ -55,22 +55,29 @@ Voir [docs/nginx-arcanix.conf](docs/nginx-arcanix.conf). Points à ne pas oublie
   l'IP de Nginx pour tout le monde ;
 - n'exposer les ports 3000/8000 du serveur Docker qu'au serveur Nginx (pare-feu).
 
-## Base de données et migrations
+## Première mise en service (base neuve)
 
-Le schéma est géré par **Alembic** ; l'API applique les migrations à chaque démarrage (`app/migrate.py`).
+1. `docker compose up -d --build` : au démarrage, l'API crée tout le schéma (migrations Alembic).
+2. **Créer le premier admin** (personne ne peut le devenir depuis le site) :
+   ```bash
+   # Créer le compte (mot de passe saisi au clavier, jamais en argument)
+   docker compose exec -it api python -m scripts.creer_admin --email toi@exemple.fr --prenom Prénom --nom Nom --classe 5A
+   # …ou recevoir un lien pour choisir le mot de passe sur le site
+   docker compose exec api python -m scripts.creer_admin --email toi@exemple.fr --prenom Prénom --nom Nom --classe 5A --lien
+   # …ou promouvoir un compte déjà inscrit (site ou /register sur Discord)
+   docker compose exec api python -m scripts.creer_admin --email toi@exemple.fr
+   ```
+3. Se connecter, créer le premier semestre (*Gestion → Semestres*, il devient automatiquement « en cours »),
+   puis nommer les modérateurs depuis *Gestion → Membres*.
 
-- Base neuve : tout est créé automatiquement.
-- **Base existante (ancien `init.sql`)** : elle est détectée, marquée sur la révision `0001`, puis migrée **sans perte**.
-  La migration `0002` convertit les points en décimaux, remet à `NULL` les faux `discord_id` « web_… »,
-  passe les emails en minuscules, active le semestre le plus récent et marque les séances existantes comme déjà annoncées.
+> ⚠️ Si l'ancienne version a tourné sur le même serveur, son volume Docker `postgres_data` contient encore
+> l'ancienne base : elle serait reprise (et migrée) telle quelle. Pour repartir de zéro, supprime ce volume
+> **après** t'être assuré de ne plus en avoir besoin (`docker volume ls`, puis `docker volume rm <nom>`).
 
-**Avant de déployer en production :**
+Sauvegarde ponctuelle : `docker compose exec db pg_dump -U admin pointsdb > sauvegarde_$(date +%F).sql`
 
-```bash
-docker compose exec db pg_dump -U admin pointsdb > sauvegarde_$(date +%F).sql
-```
-
-Si deux comptes ont le même email à la casse près, la migration s'arrête et liste les emails à fusionner.
+Le schéma est géré par **Alembic** (`API_TCG_ESGI/alembic/versions`) et appliqué à chaque démarrage. Une base
+de l'ancienne version serait aussi reconnue et migrée sans perte (voir `0002_refonte.py`).
 
 ## Sécurité
 

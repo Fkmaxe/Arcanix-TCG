@@ -1,3 +1,4 @@
+import pytest
 from datetime import date, timedelta
 
 from jose import jwt
@@ -216,3 +217,26 @@ def test_limitation_des_tentatives_de_connexion(client, make_user):
     # un autre compte n'est pas bloqué
     make_user(email="autre@ex.com", password="bon-mot-de-passe")
     assert client.post("/auth/login", json={"email": "autre@ex.com", "password": "bon-mot-de-passe"}).status_code == 200
+
+
+def test_creer_le_premier_admin(client, db):
+    from scripts.creer_admin import creer_ou_promouvoir
+
+    # Base neuve : création avec lien d'activation (pas de mot de passe saisi)
+    user, cree, lien = creer_ou_promouvoir(db, "Chef@Asso.fr", "Max", "Grados", "5A")
+    db.commit()
+    assert cree and user.role_utilisateur == "admin" and user.doit_changer_mdp and "/activer?jeton=" in lien
+    jeton = lien.split("jeton=")[1]
+    assert client.post("/auth/definir-mot-de-passe", json={"jeton": jeton, "mot_de_passe": "admin-secret"}).status_code == 200
+    tok = client.post("/auth/login", json={"email": "chef@asso.fr", "password": "admin-secret"}).json()["access_token"]
+    assert client.post("/semestres", json={"annee": 2026, "numero": 1},
+                       headers={"Authorization": f"Bearer {tok}"}).status_code == 201
+
+    # Compte existant (inscrit sur le site) : promotion
+    client.post("/users", json={"nom": "B", "prenom": "Bea", "adresse_mail": "bea@asso.fr", "classe": "1A", "password": "12345678"})
+    bea, cree, lien = creer_ou_promouvoir(db, "bea@asso.fr")
+    db.commit()
+    assert not cree and lien is None and bea.role_utilisateur == "admin"
+
+    with pytest.raises(ValueError):
+        creer_ou_promouvoir(db, "inconnu@asso.fr")  # nom/prénom/classe manquants
