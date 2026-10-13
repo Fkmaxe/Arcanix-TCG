@@ -1,0 +1,70 @@
+services:
+  db:
+    # Option 1: Use official image
+    image: postgres:16
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: pointsdb
+    volumes:
+      - ./POSTGRESQL/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  api:
+    build:
+      context: ./API_TCG_ESGI
+      dockerfile: Dockerfile
+    container_name: fastapi_app
+    restart: always
+    depends_on:
+      - db
+    environment:
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: admin
+      DB_PASSWORD: password
+      DB_NAME: pointsdb
+      API_KEY: mysecretkey
+      DISCORD_BOT_TOKEN: token-api
+      DISCORD_WEBHOOK_URL: ${DISCORD_WEBHOOK_URL}
+      DEBUG: "True"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./API_TCG_ESGI:/app  # hot-reload if desired
+
+  frontend:
+    build:
+      context: ./FRONTEND
+      dockerfile: Dockerfile
+    container_name: nextjs_app
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+    depends_on:
+      - api
+
+  discordbot:
+    build:
+      context: ./BOT_DISCORD
+      dockerfile: Dockerfile
+    container_name: discord_bot
+    restart: always
+    environment:
+      DISCORD_TOKEN: "${DISCORD_TOKEN}"
+      API_BASE_URL: http://api:8000
+      API_BOT_TOKEN: token-api
+    depends_on:
+      - api
+    volumes:
+      - ./BOT_DISCORD:/app
+
+volumes:
+  postgres_data:
+
