@@ -3,120 +3,203 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ==========================================================================
+   Arcanix — « fantasy médiéval moderne »
+   Palette tirée du logo : carte obsidienne, flammes rouge → or, enluminures dorées.
+   Thème sombre « Obsidienne » par défaut, thème clair « Parchemin ».
+   ========================================================================== */
+
 @theme inline {
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-cinzel), "Cinzel", Georgia, serif;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Couleurs de marque */
+  --color-gold: var(--gold);
+  --color-gold-deep: var(--gold-deep);
+  --color-ember: var(--ember);
+  --color-flame: var(--flame);
+  --color-success: var(--success);
+  --color-surface: var(--surface);
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  --animate-ember-rise: ember-rise var(--ember-duration, 6s) linear infinite;
+  --animate-flicker: flicker 4s ease-in-out infinite;
+  --animate-shimmer: shimmer 2.4s linear infinite;
 }
 
+/* Thème clair « Parchemin » */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.646 0.222 41.116);
-  --chart-2: oklch(0.6 0.118 184.704);
-  --chart-3: oklch(0.398 0.07 227.392);
-  --chart-4: oklch(0.828 0.189 84.429);
-  --chart-5: oklch(0.769 0.188 70.08);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --radius: 0.75rem;
+
+  --background: #f6efe0;
+  --foreground: #1b1410;
+  --surface: #efe4cd;
+  --card: #fffaf0;
+  --card-foreground: #1b1410;
+  --popover: #fffaf0;
+  --popover-foreground: #1b1410;
+  --primary: #d9a032;
+  --primary-foreground: #1b1008;
+  --secondary: #eadcc0;
+  --secondary-foreground: #2a1d12;
+  --muted: #ece0c8;
+  --muted-foreground: #6b5a45;
+  --accent: #f3e2bd;
+  --accent-foreground: #5a3a0c;
+  --destructive: #b3261e;
+  --border: rgb(122 84 28 / 0.22);
+  --input: rgb(122 84 28 / 0.3);
+  --ring: #c27c12;
+
+  --gold: #a8781c;
+  --gold-deep: #7a5410;
+  --ember: #d4560f;
+  --flame: #b3261e;
+  --success: #2f7d3a;
+
+  --glow: rgb(212 86 15 / 0.12);
+  --frame-from: #d9a032;
+  --frame-via: #b3261e;
+  --frame-to: #a8781c;
 }
 
+/* Thème sombre « Obsidienne » */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.488 0.243 264.376);
-  --chart-2: oklch(0.696 0.17 162.48);
-  --chart-3: oklch(0.769 0.188 70.08);
-  --chart-4: oklch(0.627 0.265 303.9);
-  --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #0b0a0c;
+  --foreground: #f3e9d2;
+  --surface: #110e10;
+  --card: #151113;
+  --card-foreground: #f3e9d2;
+  --popover: #1a1517;
+  --popover-foreground: #f3e9d2;
+  --primary: #f5c24b;
+  --primary-foreground: #1a1208;
+  --secondary: #231b1a;
+  --secondary-foreground: #f3e9d2;
+  --muted: #1e1817;
+  --muted-foreground: #b9a98d;
+  --accent: #2a1e17;
+  --accent-foreground: #ffd98a;
+  --destructive: #ef4a33;
+  --border: rgb(245 194 75 / 0.14);
+  --input: rgb(245 194 75 / 0.22);
+  --ring: #f5a524;
+
+  --gold: #f5c24b;
+  --gold-deep: #b8860b;
+  --ember: #ff7a1a;
+  --flame: #e8361f;
+  --success: #5ad07a;
+
+  --glow: rgb(255 122 26 / 0.16);
+  --frame-from: #ffd763;
+  --frame-via: #ff7a1a;
+  --frame-to: #b8860b;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
   }
+  html {
+    -webkit-tap-highlight-color: transparent;
+    scroll-padding-top: 5rem;
+  }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
+    background-image:
+      radial-gradient(60rem 30rem at 50% -10rem, var(--glow), transparent 70%),
+      radial-gradient(40rem 30rem at 110% 110%, var(--glow), transparent 70%);
+    background-attachment: fixed;
+    min-height: 100dvh;
+  }
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+    letter-spacing: 0.02em;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--ember) 40%, transparent);
+  }
+  /* Champs de date/heure lisibles en thème sombre */
+  .dark input[type="date"], .dark input[type="time"] {
+    color-scheme: dark;
+  }
+}
+
+@layer components {
+  /* Dégradé flamme du logo */
+  .bg-flame {
+    background-image: linear-gradient(135deg, var(--flame) 0%, var(--ember) 45%, #ffd763 100%);
+  }
+  /* Texte doré */
+  .text-gilded {
+    background-image: linear-gradient(180deg, #ffe7a3 0%, var(--gold) 45%, var(--ember) 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  :root:not(.dark) .text-gilded {
+    background-image: linear-gradient(180deg, #c8901e 0%, #a8781c 50%, #b3261e 100%);
+  }
+  /* Cadre enluminé : bordure en dégradé or/braise */
+  .frame-gilded {
+    border: 1px solid transparent;
+    background:
+      linear-gradient(var(--card), var(--card)) padding-box,
+      linear-gradient(135deg, var(--frame-from), var(--frame-via) 50%, var(--frame-to)) border-box;
+  }
+  /* Filet ornemental horizontal */
+  .rule-ornate {
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold) 20%, var(--ember) 50%, var(--gold) 80%, transparent);
+    opacity: 0.6;
+  }
+  /* Respect des encoches iOS */
+  .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+  .pt-safe { padding-top: env(safe-area-inset-top); }
+}
+
+@keyframes ember-rise {
+  0% { transform: translate3d(0, 0, 0) scale(1); opacity: 0; }
+  15% { opacity: 0.9; }
+  100% { transform: translate3d(var(--ember-drift, 20px), -70vh, 0) scale(0.3); opacity: 0; }
+}
+@keyframes flicker {
+  0%, 100% { opacity: 1; filter: drop-shadow(0 0 18px var(--glow)); }
+  50% { opacity: 0.92; filter: drop-shadow(0 0 32px color-mix(in srgb, var(--ember) 35%, transparent)); }
+}
+@keyframes shimmer {
+  from { background-position: -200% 0; }
+  to { background-position: 200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
   }
 }

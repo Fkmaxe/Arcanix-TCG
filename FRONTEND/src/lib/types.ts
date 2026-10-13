@@ -1,60 +1,129 @@
-// src/lib/types.ts
-import { z } from "zod";
+// src/lib/types.ts — types renvoyés par l'API
+export type Role = "user" | "moderator" | "admin";
 
-export const User = z.object({
-    id: z.number(),
-    nom: z.string(),
-    prenom: z.string(),
-    adresse_mail: z.string().email(),
-    role_utilisateur: z.enum(["user","moderator","admin"]),
-    classe: z.string(),
-    password: z.string().min(8),
-});
-export type User = z.infer<typeof User>;
+export interface Me {
+    id: number;
+    nom: string;
+    prenom: string;
+    email: string;
+    adresse_mail: string;
+    role_utilisateur: Role;
+    classe: string;
+    doit_changer_mdp: boolean;
+    discord_lie: boolean;
+}
 
-export const Semestre = z.object({
-    id: z.number(),
-    annee: z.number(),
-    numero: z.number(),
-});
-export type Semestre = z.infer<typeof Semestre>;
+export interface User {
+    id: number;
+    nom: string;
+    prenom: string;
+    adresse_mail: string;
+    role_utilisateur: Role;
+    classe: string;
+    discord_id: string | null;
+    doit_changer_mdp: boolean;
+}
 
-export const Seance = z.object({
-    id: z.number(),
-    nom: z.string(),
-    date_seance: z.string(), // ISO date
-    nb_point: z.number(),
-    semestre_id: z.number(),
-});
-export type Seance = z.infer<typeof Seance>;
+export interface Semestre {
+    id: number;
+    annee: number;
+    numero: number;
+    actif: boolean;
+}
 
-export const Participation = z.object({
-    utilisateur_id: z.number(),
-    seance_id: z.number(),
-    present: z.boolean(),
-    commentaire: z.string().nullable().optional(),
-});
-export type Participation = z.infer<typeof Participation>;
+export interface Seance {
+    id: number;
+    nom: string;
+    date_seance: string; // AAAA-MM-JJ
+    heure_debut: string | null; // HH:MM:SS
+    lieu: string | null;
+    jeu: string | null;
+    description: string | null;
+    nb_point: number;
+    semestre_id: number;
+    semestre: Semestre | null;
+    nb_participants: number;
+    nb_presents: number;
+}
 
-export const Token = z.object({
-    access_token: z.string(),
-    token_type: z.literal("bearer"),
-});
-export type Token = z.infer<typeof Token>;
+export interface ParticipantDetail {
+    utilisateur_id: number;
+    seance_id: number;
+    present: boolean;
+    commentaire: string | null;
+    nom: string;
+    prenom: string;
+    classe: string;
+    adresse_mail: string | null;
+    discord_lie: boolean;
+}
 
-export const MyPoints = z.object({
-    userId: z.number(),
-    semestres: z.array(z.object({
-        semestre_id: z.number(),
-        annee: z.number(),
-        numero: z.number(),
-        points: z.number(),
-    })),
-    total: z.number(),
-});
-export type MyPoints = z.infer<typeof MyPoints>;
+export interface SeanceDetail extends Seance {
+    participants: ParticipantDetail[];
+    ma_participation: boolean | null;
+}
 
-export const UserCreate = User.omit({ id: true }).extend({
-    password: z.string().min(8),
-});
-export type UserCreate = z.infer<typeof UserCreate>;
+export type SeanceInput = {
+    nom: string;
+    date_seance: string;
+    heure_debut: string | null;
+    lieu: string | null;
+    jeu: string | null;
+    description: string | null;
+    nb_point: number;
+    semestre_id: number;
+};
+
+export interface MaParticipation {
+    seance_id: number;
+    seance_nom: string;
+    date_seance: string;
+    jeu: string | null;
+    nb_point: number;
+    present: boolean;
+    commentaire: string | null;
+    semestre_id: number;
+}
+
+export interface MyPoints {
+    userId: number;
+    semestres: { semestre_id: number; annee: number; numero: number; points: number }[];
+    total: number;
+}
+
+export interface MesStats {
+    semestre: Semestre | null;
+    points: number;
+    rang: number | null;
+    nb_membres_classes: number;
+    seances_semestre: number;
+    presences: number;
+    taux_presence: number;
+    evolution: { date: string; seance: string; points: number; cumul: number }[];
+}
+
+export interface LigneClassement {
+    rang: number;
+    userId: number;
+    prenom: string;
+    nom: string;
+    classe: string;
+    points: number;
+    presences: number;
+    moi: boolean;
+}
+
+export interface Classement {
+    semestre: Semestre | null;
+    lignes: LigneClassement[];
+}
+
+export interface StatPoints {
+    rang: number;
+    userId: number;
+    nom: string;
+    prenom: string;
+    classe: string;
+    points: number;
+    presences: number;
+}

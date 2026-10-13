@@ -1,59 +1,90 @@
-// src/lib/api.ts
-import { fetcher } from "./swr";
-import { User, Semestre, Seance, Participation, MyPoints } from "./types";
+// src/lib/api.ts — appels typés vers l'API Arcanix
+import { download, fetcher, fetchPage } from "./swr";
+import type {
+    Classement, MaParticipation, Me, MesStats, MyPoints, ParticipantDetail, Seance, SeanceDetail, SeanceInput,
+    Semestre, StatPoints, User,
+} from "./types";
 
-// USERS
-export const UsersApi = {
-    list: (params?: URLSearchParams) => fetcher(`/users${params ? `?${params}` : ""}`),                       // GET /users  [oai_citation:3‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-    get: (id: number) => fetcher(`/users/${id}`),                                                             // GET /users/{id}  [oai_citation:4‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-    create: (body: { nom: string; prenom: string; adresse_mail: string; classe: string; role_utilisateur: string; password: string }) => fetcher(`/users`, { method:"POST", body: JSON.stringify(body) }),        // POST /users  [oai_citation:5‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-    update: (id: number, body: Partial<User>) => fetcher(`/users/${id}`, { method:"PATCH", body: JSON.stringify(body) }), // PATCH  [oai_citation:6‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-    remove: (id: number) => fetcher(`/users/${id}`, { method:"DELETE" }),
-    changePassword: async (id: number, new_password: string) =>
-        fetcher(`/users/${id}/password`, {
-            method: "PATCH",
-            body: JSON.stringify({ new_password }),
-        }),
+const json = (method: string, body?: unknown): RequestInit => ({
+    method,
+    body: body === undefined ? undefined : JSON.stringify(body),
+});
+const qs = (params: Record<string, string | number | boolean | null | undefined>) => {
+    const p = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== "") p.set(k, String(v));
+    });
+    const s = p.toString();
+    return s ? `?${s}` : "";
 };
 
-// SEMESTRES
-export const SemestresApi = {
-    list: () => fetcher(`/semestres`),                                                                        // GET /semestres  [oai_citation:8‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-    get: (id: number) => fetcher(`/semestres/${id}`),                                                         // GET /semestres/{sid}  [oai_citation:9‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-    create: (b: Partial<Semestre>) => fetcher(`/semestres`, { method:"POST", body: JSON.stringify(b) }),      // POST  [oai_citation:10‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-    update: (id: number, b: Partial<Semestre>) => fetcher(`/semestres/${id}`, { method:"PATCH", body: JSON.stringify(b) }), // PATCH  [oai_citation:11‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-    remove: (id: number) => fetcher(`/semestres/${id}`, { method:"DELETE" }),                                 // DELETE  [oai_citation:12‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-};
-
-// SEANCES
-export const SeancesApi = {
-    list: (params?: URLSearchParams) => fetcher(`/seances${params ? `?${params}` : ""}`),                     // GET /seances  [oai_citation:13‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-    get: (id:number) => fetcher(`/seances/${id}`),                                                            // GET /seances/{sid}  [oai_citation:14‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-    create: (b: Partial<Seance>) => fetcher(`/seances`, { method:"POST", body: JSON.stringify(b) }),          // POST  [oai_citation:15‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-    update: (id:number, b: Partial<Seance>) => fetcher(`/seances/${id}`, { method:"PATCH", body: JSON.stringify(b) }), // PATCH  [oai_citation:16‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-    remove: (id:number) => fetcher(`/seances/${id}`, { method:"DELETE" }),                                    // DELETE  [oai_citation:17‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-    participants: {
-        list: (sid:number) => fetcher(`/seances/${sid}/participants`),                                          // GET participants  [oai_citation:18‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-        add: (sid:number, p: Participation) => fetcher(`/seances/${sid}/participants`, { method:"POST", body: JSON.stringify(p) }), // POST  [oai_citation:19‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-        patch: (sid:number, uid:number, b: Partial<Participation>) => fetcher(`/seances/${sid}/participants/${uid}`, { method:"PATCH", body: JSON.stringify(b) }), // PATCH  [oai_citation:20‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-        remove: (sid:number, uid:number) => fetcher(`/seances/${sid}/participants/${uid}`, { method:"DELETE" }), // DELETE  [oai_citation:21‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-    }
-};
-
-// ME
-export const MeApi = {
-    participations: (semestreId?: number) => fetcher(`/me/participations${semestreId?`?semestreId=${semestreId}`:""}`), // GET /me/participations  [oai_citation:22‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-    points: () => fetcher(`/me/points`) as Promise<MyPoints>,                                                // GET /me/points  [oai_citation:23‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-};
-
-// STATS / EXPORTS
-export const StatsApi = {
-    points: (params?: URLSearchParams) => fetcher(`/stats/points${params?`?${params}`:""}`),                  // GET /stats/points  [oai_citation:24‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-    exportParticipationsCsv: (semestreId?: number) =>
-        fetcher(`/exports/participations.csv${semestreId?`?semestreId=${semestreId}`:""}`),                     // GET /exports/participations.csv  [oai_citation:25‡Points & Séances API - Swagger UI.pdf](sediment://file_000000002d4461f4ad4348e62483adfa)
-};
 export const AuthApi = {
-    register: (payload: {
-        nom: string; prenom: string; adresse_mail: string; classe: string; password: string;
-    }) => fetcher(`/auth/register`, { method: "POST", body: JSON.stringify(payload) }),
+    login: (email: string, password: string) =>
+        fetcher<{ access_token: string }>("/auth/login", json("POST", { email, password })),
+    me: () => fetcher<Me>("/auth/me"),
+    definirMotDePasse: (jeton: string, mot_de_passe: string) =>
+        fetcher<{ access_token: string }>("/auth/definir-mot-de-passe", json("POST", { jeton, mot_de_passe })),
+    register: (body: { nom: string; prenom: string; adresse_mail: string; classe: string; password: string }) =>
+        fetcher<User>("/users", json("POST", body)),
+};
+
+export const MeApi = {
+    update: (body: Partial<Pick<Me, "nom" | "prenom" | "classe">>) => fetcher<Me>("/me", json("PATCH", body)),
+    changePassword: (new_password: string, current_password?: string) =>
+        fetcher<null>("/me/password", json("PATCH", { new_password, current_password })),
+    participations: (semestreId?: number) => fetcher<MaParticipation[]>(`/me/participations${qs({ semestreId })}`),
+    points: () => fetcher<MyPoints>("/me/points"),
+    stats: (semestreId?: number) => fetcher<MesStats>(`/me/stats${qs({ semestreId })}`),
+    codeDiscord: () => fetcher<{ code: string; expire_dans_minutes: number }>("/me/code-discord", json("POST")),
+    delierDiscord: () => fetcher<null>("/me/discord", json("DELETE")),
+};
+
+export type UsersQuery = { q?: string; role?: string; classe?: string; page?: number; limit?: number };
+export const UsersApi = {
+    list: (params: UsersQuery = {}) => fetchPage<User>(`/users${qs(params)}`),
+    classes: () => fetcher<string[]>("/users/classes"),
+    create: (body: Omit<User, "id" | "discord_id" | "doit_changer_mdp"> & { password: string }) =>
+        fetcher<User>("/users", json("POST", body)),
+    update: (id: number, body: Partial<Omit<User, "id" | "discord_id" | "doit_changer_mdp">>) =>
+        fetcher<User>(`/users/${id}`, json("PATCH", body)),
+    remove: (id: number) => fetcher<null>(`/users/${id}`, json("DELETE")),
+    setPassword: (id: number, new_password: string) =>
+        fetcher<null>(`/users/${id}/password`, json("PATCH", { new_password })),
+    lienMotDePasse: (id: number) =>
+        fetcher<{ url: string; expire_dans_heures: number }>(`/users/${id}/lien-mot-de-passe`, json("POST")),
+};
+
+export const SemestresApi = {
+    list: () => fetcher<Semestre[]>("/semestres"),
+    actif: () => fetcher<Semestre | null>("/semestres/actif"),
+    create: (b: { annee: number; numero: number }) => fetcher<Semestre>("/semestres", json("POST", b)),
+    update: (id: number, b: { annee?: number; numero?: number }) => fetcher<Semestre>(`/semestres/${id}`, json("PATCH", b)),
+    activer: (id: number) => fetcher<Semestre>(`/semestres/${id}/activer`, json("POST")),
+    remove: (id: number) => fetcher<null>(`/semestres/${id}`, json("DELETE")),
+};
+
+export type SeancesQuery = {
+    semestreId?: number; a_venir?: boolean; jeu?: string; q?: string; page?: number; limit?: number;
+};
+export const SeancesApi = {
+    list: (params: SeancesQuery = {}) => fetchPage<Seance>(`/seances${qs(params)}`),
+    get: (id: number) => fetcher<SeanceDetail>(`/seances/${id}`),
+    create: (b: SeanceInput) => fetcher<Seance>("/seances", json("POST", b)),
+    update: (id: number, b: Partial<SeanceInput>) => fetcher<Seance>(`/seances/${id}`, json("PATCH", b)),
+    remove: (id: number) => fetcher<null>(`/seances/${id}`, json("DELETE")),
+    appel: (id: number, participants: { utilisateur_id: number; present: boolean }[], remplacer = true) =>
+        fetcher<SeanceDetail>(`/seances/${id}/participants`, json("PUT", { participants, remplacer })),
+    retirer: (id: number, uid: number) => fetcher<null>(`/seances/${id}/participants/${uid}`, json("DELETE")),
+    patchParticipant: (id: number, uid: number, b: Partial<Pick<ParticipantDetail, "present" | "commentaire">>) =>
+        fetcher(`/seances/${id}/participants/${uid}`, json("PATCH", b)),
+};
+
+export const StatsApi = {
+    classement: (semestreId?: number, classe?: string) =>
+        fetcher<Classement>(`/stats/classement${qs({ semestreId, classe })}`),
+    points: (semestreId?: number) => fetcher<StatPoints[]>(`/stats/points${qs({ semestreId })}`),
+    exportPointsCsv: (semestreId?: number) => download(`/exports/points.csv${qs({ semestreId })}`, "points.csv"),
+    exportPointsJson: (semestreId?: number) => download(`/exports/points.json${qs({ semestreId })}`, "points.json"),
+    exportParticipationsCsv: (semestreId?: number) =>
+        download(`/exports/participations.csv${qs({ semestreId })}`, "participations.csv"),
 };

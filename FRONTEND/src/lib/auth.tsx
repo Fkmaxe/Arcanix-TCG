@@ -1,115 +1,104 @@
-// src/lib/auth.ts
+// src/lib/auth.tsx — session utilisateur (jeton + profil /auth/me)
 "use client";
 
-import useSWR, { useSWRConfig, SWRResponse } from "swr";
-import { fetcher } from "./swr";
-import { Token } from "./types";
-import { atom, useAtom } from "jotai";
-import { useRouter } from "next/navigation";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import useSWR, { useSWRConfig } from "swr";
+import { AuthApi } from "./api";
+import { tokenStore } from "./swr";
+import type { Me, Role } from "./types";
 
-/**
- * Token global (initialisé depuis localStorage côté client)
- */
-export const tokenAtom = atom<string | null>(
-    typeof window !== "undefined" ? localStorage.getItem("token") : null
-);
-export const meAtom = atom<any | null>(null);
-
-/**
- * Fetcher qui prend une clé tuple [url, token] pour attacher l'Authorization
- */
-async function fetcherAuth([url, token]: [string, string]) {
-    return fetcher(url, {
-        headers: { Authorization: `Bearer ${token}` },
-    });
-}
-
-/**
- * Hook de login
- */
-export function useLogin() {
-    const { mutate } = useSWRConfig();
-    const [, setToken] = useAtom(tokenAtom);
-
-    const login = async (email: string, password: string) => {
-        const data = await fetcher("/auth/login", {
-            method: "POST",
-            body: JSON.stringify({ email, password }),
-        });
-        const parsed = Token.parse(data);
-        // Persiste + met à jour l’état global
-        localStorage.setItem("token", parsed.access_token);
-        setToken(parsed.access_token);
-
-        // Revalide immédiatement /auth/me
-        await mutate(["/auth/me", parsed.access_token]);
-
-        // Optionnel : navigation ici ou dans la page
-        // router.replace("/");
-
-        return parsed;
-    };
-
-    return { login };
-}
-
-/**
- * Récupération du profil, réactive au token
- */
-export function useMe(): {
-    me: any | null;
+type AuthState = {
+    /** false tant que le jeton n'a pas été relu depuis le stockage (évite les erreurs d'hydratation) */
+    ready: boolean;
+    token: string | null;
+    me: Me | null;
     isLoading: boolean;
-    error: unknown;
-    refresh: SWRResponse["mutate"];
-} {
-    const [token] = useAtom(tokenAtom);
+    login: (email: string, password: string) => Promise<Me>;
+    setSession: (token: string) => Promise<Me | undefined>;
+    logout: () => void;
+    refresh: () => Promise<Me | undefined>;
+};
 
-    // Pas de token -> pas d’appel
-    const { data, error, isLoading, mutate } = useSWR(
-        token ? ["/auth/me", token] : null,
-        fetcherAuth,
-        { revalidateOnFocus: false }
+const AuthContext = createContext<AuthState | null>(null);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+    const [ready, setReady] = useState(false);
+    const [token, setToken] = useState<string | null>(null);
+    const { mutate: globalMutate } = useSWRConfig();
+
+    useEffect(() => {
+        setToken(tokenStore.get());
+        setReady(true);
+        const unsubscribe = tokenStore.subscribe(setToken);
+        // Synchronise les onglets (connexion / déconnexion ailleurs)
+        const onStorage = (e: StorageEvent) => e.key === "token" && setToken(e.newValue);
+        window.addEventListener("storage", onStorage);
+        return () => {
+            unsubscribe();
+            window.removeEventListener("storage", onStorage);
+        };
+    }, []);
+
+    const { data, isLoading, mutate } = useSWR<Me>(token ? ["/auth/me", token] : null, () => AuthApi.me(), {
+        revalidateOnFocus: true,
+        shouldRetryOnError: false,
+    });
+
+    const setSession = useCallback(
+        async (t: string) => {
+            tokenStore.set(t);
+            return mutate(AuthApi.me(), { revalidate: false });
+        },
+        [mutate],
     );
 
-    return { me: data ?? null, isLoading, error, refresh: mutate };
+    const login = useCallback(
+        async (email: string, password: string) => {
+            const { access_token } = await AuthApi.login(email, password);
+            tokenStore.set(access_token);
+            const me = await AuthApi.me();
+            await mutate(me, { revalidate: false });
+            return me;
+        },
+        [mutate],
+    );
+
+    const logout = useCallback(() => {
+        tokenStore.set(null);
+        // Vide tout le cache SWR (données de l'ancien compte)
+        globalMutate(() => true, undefined, { revalidate: false });
+    }, [globalMutate]);
+
+    const value = useMemo<AuthState>(
+        () => ({
+            ready,
+            token,
+            me: token ? (data ?? null) : null,
+            isLoading: !ready || (!!token && isLoading && !data),
+            login,
+            setSession,
+            logout,
+            refresh: () => mutate(),
+        }),
+        [ready, token, data, isLoading, login, setSession, logout, mutate],
+    );
+
+    return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
-/**
- * Déconnexion propre : nettoie token + cache SWR
- */
 export function useAuth() {
-    const router = useRouter();
-    const { mutate } = useSWRConfig();
-    const [, setToken] = useAtom(tokenAtom);
-
-    const logout = async () => {
-        // Retire token
-        localStorage.removeItem("token");
-        setToken(null);
-
-        // Vide /auth/me côté cache (immédiat pour l’UI)
-        await mutate(["/auth/me", undefined as unknown as string], null, false);
-        await mutate("/auth/me", null, false); // au cas où d’autres endroits l’aient utilisé sans tuple
-
-        // Navigation
-        router.replace("/login");
-    };
-
-    return { logout };
+    const ctx = useContext(AuthContext);
+    if (!ctx) throw new Error("useAuth doit être utilisé dans <AuthProvider>");
+    return ctx;
 }
 
-/**
- * Gate simple sur les rôles
- */
-export function RoleGate({
-                             allow,
-                             children,
-                         }: {
-    allow: ("user" | "moderator" | "admin")[];
-    children: React.ReactNode;
-}) {
-    const { me, isLoading } = useMe();
-    if (isLoading) return null;
-    if (!me || !allow.includes(me.role_utilisateur)) return null;
-    return <>{children}</>;
+/** Compatibilité avec l'ancien hook. */
+export function useMe() {
+    const { me, isLoading, refresh } = useAuth();
+    return { me, isLoading, refresh };
 }
+
+export const isStaff = (me?: Pick<Me, "role_utilisateur"> | null) =>
+    !!me && (me.role_utilisateur === "admin" || me.role_utilisateur === "moderator");
+
+export const hasRole = (me: Me | null, allow: Role[]) => !!me && allow.includes(me.role_utilisateur);
