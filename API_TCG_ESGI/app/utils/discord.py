@@ -1,80 +1,39 @@
-import os
+"""Notifications Discord via webhook (optionnel, exécutées en tâche de fond)."""
+import logging
+
 import httpx
-from typing import Optional
 
-DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL")
+from .. import config
 
-async def send_discord_notification(
-    title: str,
-    description: str,
-    color: int = 0x5865F2,  # Discord blurple
-    fields: Optional[list[dict]] = None
-):
-    """
-    Envoie une notification Discord via webhook
+log = logging.getLogger("arcanix.discord")
 
-    Args:
-        title: Titre du message
-        description: Description du message
-        color: Couleur de l'embed (int hex)
-        fields: Liste de dictionnaires avec 'name' et 'value'
-    """
-    if not DISCORD_WEBHOOK_URL:
-        print("⚠️ DISCORD_WEBHOOK_URL non configuré, notification ignorée")
+OR = 0xF5C24B
+BRAISE = 0xFF7A1A
+
+
+def envoyer_embed(title: str, description: str, color: int = OR, fields: list[dict] | None = None) -> None:
+    if not config.DISCORD_WEBHOOK_URL:
         return
-
-    embed = {
-        "title": title,
-        "description": description,
-        "color": color,
-        "timestamp": None,  # Discord ajoutera l'heure actuelle
-    }
-
+    embed = {"title": title, "description": description, "color": color}
     if fields:
         embed["fields"] = fields
-
-    payload = {
-        "embeds": [embed]
-    }
-
     try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(DISCORD_WEBHOOK_URL, json=payload)
-            response.raise_for_status()
-            print(f"✅ Notification Discord envoyée: {title}")
-    except Exception as e:
-        print(f"❌ Erreur lors de l'envoi de la notification Discord: {e}")
+        httpx.post(config.DISCORD_WEBHOOK_URL, json={"embeds": [embed]}, timeout=5.0).raise_for_status()
+    except Exception as e:  # une notification ne doit jamais faire échouer l'API
+        log.warning("Notification Discord échouée : %s", e)
 
 
-def send_discord_notification_sync(
-    title: str,
-    description: str,
-    color: int = 0x5865F2,
-    fields: Optional[list[dict]] = None
-):
-    """
-    Version synchrone de send_discord_notification
-    """
-    if not DISCORD_WEBHOOK_URL:
-        print("⚠️ DISCORD_WEBHOOK_URL non configuré, notification ignorée")
-        return
-
-    embed = {
-        "title": title,
-        "description": description,
-        "color": color,
-    }
-
-    if fields:
-        embed["fields"] = fields
-
-    payload = {
-        "embeds": [embed]
-    }
-
-    try:
-        response = httpx.post(DISCORD_WEBHOOK_URL, json=payload, timeout=5.0)
-        response.raise_for_status()
-        print(f"✅ Notification Discord envoyée: {title}")
-    except Exception as e:
-        print(f"❌ Erreur lors de l'envoi de la notification Discord: {e}")
+def notifier_participants(seance, membres: list) -> None:
+    noms = ", ".join(f"**{m.prenom} {m.nom}**" for m in membres[:20])
+    if len(membres) > 20:
+        noms += f" et {len(membres) - 20} autre(s)"
+    pluriel = "s" if len(membres) > 1 else ""
+    envoyer_embed(
+        title=f"🔥 {len(membres)} participant{pluriel} ajouté{pluriel}",
+        description=f"{noms} — séance **{seance.nom}**",
+        color=BRAISE,
+        fields=[
+            {"name": "Points gagnés", "value": f"**{float(seance.nb_point):g}** pts", "inline": True},
+            {"name": "Date", "value": seance.date_seance.strftime("%d/%m/%Y"), "inline": True},
+        ],
+    )

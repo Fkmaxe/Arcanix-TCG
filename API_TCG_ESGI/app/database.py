@@ -1,7 +1,8 @@
 # app/database.py
 import os
+
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 # Lis DATABASE_URL si présent, sinon assemble depuis DB_*
 DB_USER = os.getenv("DB_USER", "admin")
@@ -15,16 +16,13 @@ DATABASE_URL = os.getenv(
     f"postgresql+psycopg://{DB_USER}:{DB_PASSWORD}@{DB_HOST}:{DB_PORT}/{DB_NAME}",
 )
 
-engine = create_engine(
-    DATABASE_URL,
-    pool_pre_ping=True,
-    pool_size=5,
-    max_overflow=10,
-)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
+engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_size=5, max_overflow=10)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False)
+
 
 class Base(DeclarativeBase):
     pass
+
 
 def get_db():
     db = SessionLocal()

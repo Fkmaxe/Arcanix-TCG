@@ -1,44 +1,93 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
+
 from ..database import get_db
-from ..models import Semestre
+from ..models import Seance, Semestre
 from ..schemas import SemestreCreate, SemestreOut, SemestreUpdate
-from ..security import require_roles, get_current_user
+from ..security import require_roles
+from ..services import semestre_actif
 
 router = APIRouter(prefix="/semestres", tags=["semestres"])
 
+
+def _doublon(db: Session, annee: int, numero: int, sauf_id: int | None = None) -> bool:
+    q = db.query(Semestre).filter(Semestre.annee == annee, Semestre.numero == numero)
+    if sauf_id:
+        q = q.filter(Semestre.id != sauf_id)
+    return db.query(q.exists()).scalar()
+
+
 @router.get("", response_model=list[SemestreOut])
 def list_semestres(db: Session = Depends(get_db)):
-    return db.query(Semestre).order_by(Semestre.annee, Semestre.numero).all()
+    return db.query(Semestre).order_by(Semestre.annee.desc(), Semestre.numero.desc()).all()
+
+
+@router.get("/actif", response_model=SemestreOut | None)
+def get_semestre_actif(db: Session = Depends(get_db)):
+    return semestre_actif(db)
+
 
 @router.get("/{sid}", response_model=SemestreOut)
 def get_semestre(sid: int, db: Session = Depends(get_db)):
     s = db.get(Semestre, sid)
-    if not s: raise HTTPException(404, "Semestre introuvable")
+    if not s:
+        raise HTTPException(404, "Semestre introuvable")
     return s
 
+
 @router.post("", response_model=SemestreOut, status_code=201)
-def create_semestre(body: SemestreCreate, db: Session = Depends(get_db), _: any = Depends(require_roles("admin"))):
-    exists = db.query(Semestre).filter(Semestre.annee==body.annee, Semestre.numero==body.numero).first()
-    if exists: raise HTTPException(409, "Semestre déjà existant")
-    s = Semestre(**body.model_dump()); db.add(s); db.commit(); db.refresh(s); return s
+def create_semestre(body: SemestreCreate, db: Session = Depends(get_db), _=Depends(require_roles("admin"))):
+    if _doublon(db, body.annee, body.numero):
+        raise HTTPException(409, f"Le semestre {body.annee} S{body.numero} existe déjà")
+    premier = db.query(Semestre).count() == 0
+    s = Semestre(annee=body.annee, numero=body.numero, actif=premier)
+    db.add(s)
+    db.commit()
+    return s
+
 
 @router.patch("/{sid}", response_model=SemestreOut)
-def update_semestre(sid: int, body: SemestreUpdate, db: Session = Depends(get_db), _: any = Depends(require_roles("admin"))):
+def update_semestre(sid: int, body: SemestreUpdate, db: Session = Depends(get_db), _=Depends(require_roles("admin"))):
     s = db.get(Semestre, sid)
-    if not s: raise HTTPException(404, "Semestre introuvable")
-    data = body.model_dump(exclude_unset=True)
-    if "annee" in data or "numero" in data:
-        annee = data.get("annee", s.annee)
-        numero = data.get("numero", s.numero)
-        dup = db.query(Semestre).filter(Semestre.annee==annee, Semestre.numero==numero, Semestre.id!=sid).first()
-        if dup: raise HTTPException(409, "Doublon (annee, numero)")
-    for k,v in data.items(): setattr(s, k, v)
-    db.commit(); db.refresh(s); return s
+    if not s:
+        raise HTTPException(404, "Semestre introuvable")
+    data = body.model_dump(exclude_unset=True, exclude_none=True)
+    annee, numero = data.get("annee", s.annee), data.get("numero", s.numero)
+    if _doublon(db, annee, numero, sid):
+        raise HTTPException(409, f"Le semestre {annee} S{numero} existe déjà")
+    for k, v in data.items():
+        setattr(s, k, v)
+    db.commit()
+    return s
+
+
+@router.post("/{sid}/activer", response_model=SemestreOut)
+def activer_semestre(sid: int, db: Session = Depends(get_db), _=Depends(require_roles("admin"))):
+    """Définit le semestre courant. L'ancien est clôturé : son podium sera annoncé sur Discord."""
+    s = db.get(Semestre, sid)
+    if not s:
+        raise HTTPException(404, "Semestre introuvable")
+    if s.actif:
+        return s
+    for ancien in db.query(Semestre).filter(Semestre.actif.is_(True)):
+        ancien.actif = False
+        ancien.podium_annonce = False
+    db.flush()
+    s.actif = True
+    db.commit()
+    return s
+
 
 @router.delete("/{sid}", status_code=204)
-def delete_semestre(sid: int, db: Session = Depends(get_db), _: any = Depends(require_roles("admin"))):
+def delete_semestre(sid: int, db: Session = Depends(get_db), _=Depends(require_roles("admin"))):
     s = db.get(Semestre, sid)
-    if not s: raise HTTPException(404, "Semestre introuvable")
-    # Laisse l'ON DELETE RESTRICT côté FK seance -> semestre protéger si utilisé
-    db.delete(s); db.commit()
+    if not s:
+        raise HTTPException(404, "Semestre introuvable")
+    nb = db.query(func.count(Seance.id)).filter(Seance.semestre_id == sid).scalar()
+    if nb:
+        raise HTTPException(409, f"Ce semestre contient {nb} séance(s) : supprimez-les ou déplacez-les d'abord")
+    if s.actif:
+        raise HTTPException(409, "Impossible de supprimer le semestre actif")
+    db.delete(s)
+    db.commit()

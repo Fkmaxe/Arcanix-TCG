@@ -1,66 +1,77 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from sqlalchemy import select, func
+
 from ..database import get_db
-from ..models import Utilisateur, Participation, Seance, Semestre
-from ..schemas import ParticipationOut, MyPointsOut, PointsSemestre
-from ..security import get_current_user
+from ..models import Participation, Seance, Utilisateur
+from ..schemas import CodeDiscord, MaParticipation, MeOut, MesStats, MeUpdate, MyPointsOut, PasswordChange
+from ..security import creer_jeton, get_current_user, hash_password, verify_password
+from ..services import points_par_semestre, resoudre_semestre, stats_membre
+from .auth import me_out
 
 router = APIRouter(prefix="/me", tags=["me"])
 
-@router.get("/participations", response_model=list[ParticipationOut])
-def my_participations(
-    semestreId: int | None = None,
-    db: Session = Depends(get_db),
-    user: Utilisateur = Depends(get_current_user),
-):
-    q = db.query(Participation).filter(Participation.utilisateur_id == user.id)
-    if semestreId:
-        q = q.join(Seance, Participation.seance_id == Seance.id).filter(Seance.semestre_id == semestreId)
-    return q.all()
+
+@router.patch("", response_model=MeOut)
+def update_me(body: MeUpdate, db: Session = Depends(get_db), user: Utilisateur = Depends(get_current_user)):
+    for k, v in body.model_dump(exclude_unset=True, exclude_none=True).items():
+        setattr(user, k, v)
+    db.commit()
+    return me_out(user)
 
 
-@router.get("/points")
-def my_points(db: Session = Depends(get_db), user: Utilisateur = Depends(get_current_user)):
-    # SUM(nb_point) uniquement pour les présences ; COALESCE -> 0 si NULL
-    points_expr = func.coalesce(
-        func.sum(Seance.nb_point).filter(Participation.present.is_(True)),
-        0
-    ).label("points")
+@router.patch("/password", status_code=204)
+def change_my_password(body: PasswordChange, db: Session = Depends(get_db),
+                       user: Utilisateur = Depends(get_current_user)):
+    # Le mot de passe actuel est exigé, sauf si le compte doit justement le changer
+    if not user.doit_changer_mdp:
+        if not body.current_password or not verify_password(body.current_password, user.mot_de_passe_hash):
+            raise HTTPException(400, "Mot de passe actuel incorrect")
+    user.mot_de_passe_hash = hash_password(body.new_password)
+    user.doit_changer_mdp = False
+    db.commit()
 
-    stmt = (
-        select(
-            Semestre.id.label("semestre_id"),
-            Semestre.annee,
-            Semestre.numero,
-            points_expr,
-        )
-        .join(Seance, Seance.semestre_id == Semestre.id)
-        .join(Participation, Participation.seance_id == Seance.id)
-        .where(Participation.utilisateur_id == user.id)
-        .group_by(Semestre.id, Semestre.annee, Semestre.numero)
-        .order_by(Semestre.annee.desc(), Semestre.numero.desc())
+
+@router.get("/participations", response_model=list[MaParticipation])
+def my_participations(semestreId: int | None = None, db: Session = Depends(get_db),
+                      user: Utilisateur = Depends(get_current_user)):
+    q = (
+        db.query(Participation, Seance)
+        .join(Seance, Seance.id == Participation.seance_id)
+        .filter(Participation.utilisateur_id == user.id)
     )
-
-    rows = db.execute(stmt).all()
-
-    # ✅ Cas “aucune séance / aucun semestre” : renvoyer structure vide + total 0
-    if not rows:
-        return {
-            "userId": user.id,
-            "semestres": [],
-            "total": 0,
-        }
-
-    semestres = [
-        {"semestre_id": r.semestre_id, "annee": r.annee, "numero": r.numero, "points": int(r.points or 0)}
-        for r in rows
+    if semestreId:
+        q = q.filter(Seance.semestre_id == semestreId)
+    return [
+        MaParticipation(
+            seance_id=s.id, seance_nom=s.nom, date_seance=s.date_seance, jeu=s.jeu,
+            nb_point=float(s.nb_point), present=p.present, commentaire=p.commentaire,
+            semestre_id=s.semestre_id,
+        )
+        for p, s in q.order_by(Seance.date_seance.desc(), Seance.id.desc()).all()
     ]
-    total = sum(s["points"] for s in semestres)
 
-    return {
-        "userId": user.id,
-        "semestres": semestres,
-        "total": total,
-    }
+
+@router.get("/points", response_model=MyPointsOut)
+def my_points(db: Session = Depends(get_db), user: Utilisateur = Depends(get_current_user)):
+    semestres = points_par_semestre(db, user.id)
+    return {"userId": user.id, "semestres": semestres, "total": sum(s["points"] for s in semestres)}
+
+
+@router.get("/stats", response_model=MesStats)
+def my_stats(semestreId: int | None = None, db: Session = Depends(get_db),
+             user: Utilisateur = Depends(get_current_user)):
+    return stats_membre(db, user, resoudre_semestre(db, semestreId))
+
+
+@router.post("/code-discord", response_model=CodeDiscord)
+def code_discord(db: Session = Depends(get_db), user: Utilisateur = Depends(get_current_user)):
+    """Code à taper dans Discord avec /lier pour associer ce compte."""
+    code, minutes = creer_jeton(db, user, "lier_discord")
+    db.commit()
+    return CodeDiscord(code=code, expire_dans_minutes=minutes)
+
+
+@router.delete("/discord", status_code=204)
+def delier_discord(db: Session = Depends(get_db), user: Utilisateur = Depends(get_current_user)):
+    user.discord_id = None
+    db.commit()

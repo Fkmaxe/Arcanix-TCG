@@ -1,42 +1,46 @@
-import os
+import logging
+
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
-from .routers import auth, users, semestres, seances, participations, me, stats_exports , discord
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
 
+from . import config
+from .database import engine
+from .routers import auth, discord, me, participations, seances, semestres, stats_exports, users
 
-# Env vars
-db_host = os.environ.get("DB_HOST", "localhost")
-api_key = os.environ.get("API_KEY", "default_key")
-debug_mode = os.environ.get("DEBUG", "False").lower() == "true"
+logging.basicConfig(level=logging.DEBUG if config.DEBUG else logging.INFO)
+log = logging.getLogger("arcanix")
 
-app = FastAPI(title="Arcanix", version="1.0.0", debug=debug_mode)
+app = FastAPI(title="Arcanix", version="2.0.0", debug=config.DEBUG)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],      # 🌍 autorise toutes les origines
-    allow_credentials=True,   # cookies/headers d'auth autorisés
-    allow_methods=["*"],      # autorise toutes les méthodes HTTP (GET, POST, PUT, DELETE…)
-    allow_headers=["*"],      # autorise tous les headers (Authorization, Content-Type…)
+    allow_origins=config.CORS_ORIGINS,
+    allow_credentials=False,  # auth par en-tête Bearer, pas de cookies
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["X-Total-Count", "Content-Disposition"],
 )
-# Routers
-app.include_router(auth.router)
-app.include_router(users.router)
-app.include_router(semestres.router)
-app.include_router(seances.router)
-app.include_router(participations.router)
-app.include_router(me.router)
-app.include_router(stats_exports.router)
-app.include_router(discord.router)
+
+for r in (auth, users, semestres, seances, participations, me, stats_exports, discord):
+    app.include_router(r.router)
+
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    body = await request.body()
-    print("422 Request body:", body.decode("utf-8"))
-    print("422 Errors:", exc.errors())
-    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+    # On ne logue jamais le corps (il peut contenir des mots de passe)
+    erreurs = [{"loc": e.get("loc"), "msg": e.get("msg"), "type": e.get("type")} for e in exc.errors()]
+    log.info("422 sur %s %s : %s", request.method, request.url.path, erreurs)
+    return JSONResponse(status_code=422, content={"detail": erreurs})
+
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "db_host": db_host}
+    try:
+        with engine.connect() as c:
+            c.execute(text("SELECT 1"))
+        return {"status": "ok"}
+    except Exception:
+        return JSONResponse(status_code=503, content={"status": "db_unavailable"})

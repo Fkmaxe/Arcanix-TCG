@@ -1,42 +1,58 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+
 from ..database import get_db
-from ..models import Participation
-from ..schemas import ParticipationCreate, ParticipationUpdate, ParticipationOut
+from ..models import Participation, Seance, Utilisateur
+from ..schemas import ParticipationCreate, ParticipationOut, ParticipationUpdate
 from ..security import require_roles
 
 router = APIRouter(prefix="/participations", tags=["participations"])
+staff = require_roles("admin", "moderator")
+
 
 @router.get("", response_model=list[ParticipationOut])
-def list_participations(
-    userId: int | None = None,
-    seanceId: int | None = None,
-    present: bool | None = None,
-    db: Session = Depends(get_db),
-    _: any = Depends(require_roles("admin","moderator")),
-):
+def list_participations(userId: int | None = None, seanceId: int | None = None, present: bool | None = None,
+                        db: Session = Depends(get_db), _=Depends(staff)):
     q = db.query(Participation)
-    if userId is not None: q = q.filter(Participation.utilisateur_id == userId)
-    if seanceId is not None: q = q.filter(Participation.seance_id == seanceId)
-    if present is not None: q = q.filter(Participation.present == present)
+    if userId is not None:
+        q = q.filter(Participation.utilisateur_id == userId)
+    if seanceId is not None:
+        q = q.filter(Participation.seance_id == seanceId)
+    if present is not None:
+        q = q.filter(Participation.present == present)
     return q.all()
 
+
 @router.post("", response_model=ParticipationOut, status_code=201)
-def create_participation(body: ParticipationCreate, db: Session = Depends(get_db), _: any = Depends(require_roles("admin","moderator"))):
-    exists = db.get(Participation, {"utilisateur_id": body.utilisateur_id, "seance_id": body.seance_id})
-    if exists: raise HTTPException(409, "Déjà existant")
+def create_participation(body: ParticipationCreate, db: Session = Depends(get_db), _=Depends(staff)):
+    if not db.get(Utilisateur, body.utilisateur_id) or not db.get(Seance, body.seance_id):
+        raise HTTPException(404, "Membre ou séance introuvable")
+    if db.get(Participation, {"utilisateur_id": body.utilisateur_id, "seance_id": body.seance_id}):
+        raise HTTPException(409, "Participation déjà existante")
     p = Participation(**body.model_dump())
-    db.add(p); db.commit(); db.refresh(p); return p
+    db.add(p)
+    db.commit()
+    return p
+
 
 @router.patch("", response_model=ParticipationOut)
-def patch_participation(userId: int, seanceId: int, body: ParticipationUpdate, db: Session = Depends(get_db), _: any = Depends(require_roles("admin","moderator"))):
+def patch_participation(userId: int, seanceId: int, body: ParticipationUpdate,
+                        db: Session = Depends(get_db), _=Depends(staff)):
     p = db.get(Participation, {"utilisateur_id": userId, "seance_id": seanceId})
-    if not p: raise HTTPException(404, "Introuvable")
-    for k,v in body.model_dump(exclude_unset=True).items(): setattr(p, k, v)
-    db.commit(); db.refresh(p); return p
+    if not p:
+        raise HTTPException(404, "Participation introuvable")
+    for k, v in body.model_dump(exclude_unset=True).items():
+        if k == "present" and v is None:
+            continue
+        setattr(p, k, v)
+    db.commit()
+    return p
+
 
 @router.delete("", status_code=204)
-def delete_participation(userId: int, seanceId: int, db: Session = Depends(get_db), _: any = Depends(require_roles("admin","moderator"))):
+def delete_participation(userId: int, seanceId: int, db: Session = Depends(get_db), _=Depends(staff)):
     p = db.get(Participation, {"utilisateur_id": userId, "seance_id": seanceId})
-    if not p: raise HTTPException(404, "Introuvable")
-    db.delete(p); db.commit()
+    if not p:
+        raise HTTPException(404, "Participation introuvable")
+    db.delete(p)
+    db.commit()
