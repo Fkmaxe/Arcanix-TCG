@@ -1,31 +1,65 @@
-import os
+import logging
+
 import discord
+from discord import app_commands
 from discord.ext import commands
-from dotenv import load_dotenv
 
-load_dotenv()
+import config
+from utils import embeds
+from utils.api import ApiClient
 
-TOKEN = os.getenv("DISCORD_TOKEN")
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s : %(message)s")
+log = logging.getLogger("arcanix")
 
-intents = discord.Intents.default()
+EXTENSIONS = ("cogs.compte", "cogs.membres", "cogs.moderation", "cogs.annonces")
+
 
 class ArcanixBot(commands.Bot):
     def __init__(self):
-        super().__init__(command_prefix="!", intents=intents)
+        # Les commandes slash n'ont besoin d'aucun intent privilégié
+        super().__init__(command_prefix=commands.when_mentioned, intents=discord.Intents.default(), help_command=None)
+        self.api = ApiClient()
 
     async def setup_hook(self):
-        # Charge les commandes
-        await self.load_extension("commands.register")
-        await self.load_extension("commands.mypoint")
+        await self.api.start()
+        for ext in EXTENSIONS:
+            await self.load_extension(ext)
+        self.tree.on_error = self.on_app_command_error
+        if config.GUILD_ID:
+            guild = discord.Object(id=config.GUILD_ID)
+            self.tree.copy_global_to(guild=guild)
+            synced = await self.tree.sync(guild=guild)
+            log.info("🔁 %d commandes synchronisées sur le serveur %s", len(synced), config.GUILD_ID)
+        else:
+            synced = await self.tree.sync()
+            log.info("🔁 %d commandes synchronisées globalement (propagation jusqu'à 1 h)", len(synced))
 
-        # Synchronisation globale (peut prendre 1h la 1ère fois)
-        await self.tree.sync()
-        print("🔁 Commandes slash synchronisées (global)")
+    async def close(self):
+        await self.api.close()
+        await super().close()
 
-bot = ArcanixBot()
+    async def on_ready(self):
+        log.info("✅ Connecté en tant que %s (ID %s)", self.user, self.user.id)
+        await self.change_presence(activity=discord.Game(name="/points · /seances"))
 
-@bot.event
-async def on_ready():
-    print(f"✅ Bot connecté en tant que {bot.user} (ID: {bot.user.id})")
+    async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        if isinstance(error, app_commands.MissingPermissions):
+            msg = "Tu n'as pas la permission d'utiliser cette commande."
+        elif isinstance(error, app_commands.NoPrivateMessage):
+            msg = "Cette commande s'utilise sur le serveur de l'association."
+        else:
+            log.exception("Erreur dans /%s", interaction.command.name if interaction.command else "?", exc_info=error)
+            msg = "Oups, une erreur inattendue est survenue. Réessaie dans un instant."
+        send = interaction.followup.send if interaction.response.is_done() else interaction.response.send_message
+        try:
+            await send(embed=embeds.erreur(msg), ephemeral=True)
+        except discord.DiscordException:
+            pass
 
-bot.run(TOKEN)
+
+if __name__ == "__main__":
+    if not config.DISCORD_TOKEN:
+        raise SystemExit("DISCORD_TOKEN manquant")
+    if not config.API_BOT_TOKEN:
+        raise SystemExit("API_BOT_TOKEN manquant (doit être égal à DISCORD_BOT_TOKEN côté API)")
+    ArcanixBot().run(config.DISCORD_TOKEN, log_handler=None)
