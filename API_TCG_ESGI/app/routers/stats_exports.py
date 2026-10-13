@@ -24,7 +24,7 @@ def stats_points(semestreId: int | None = None, classe: str | None = None, userI
     lignes = classement(db, semestreId, inclure_zero=True, classe=classe, user_id=userId)
     return [
         {"rang": l["rang"], "userId": l["userId"], "nom": l["nom"], "prenom": l["prenom"],
-         "classe": l["classe"], "points": l["points"], "presences": l["presences"]}
+         "classe": l["classe"], "points": l["points"], "presences": l["presences"], "bonus": l["bonus"]}
         for l in lignes
     ]
 
@@ -82,8 +82,8 @@ def export_participations_csv(semestreId: int | None = None, db: Session = Depen
 def export_points_csv(semestreId: int | None = None, db: Session = Depends(get_db), _=Depends(staff)):
     lignes = classement(db, semestreId, inclure_zero=True)
     rows = [[l["rang"], l["nom"], l["prenom"], l["classe"], l["adresse_mail"], l["presences"],
-             f'{l["points"]:g}'.replace(".", ",")] for l in lignes]
-    return _csv_response(rows, ["rang", "nom", "prenom", "classe", "email", "presences", "points"],
+             f'{l["bonus"]:g}'.replace(".", ","), f'{l["points"]:g}'.replace(".", ",")] for l in lignes]
+    return _csv_response(rows, ["rang", "nom", "prenom", "classe", "email", "presences", "bonus_malus", "points"],
                          _nom_fichier(db, semestreId, "points", "csv"))
 
 
@@ -94,7 +94,7 @@ def export_points_json(semestreId: int | None = None, db: Session = Depends(get_
     payload = {
         "semestre": SemestreOut.model_validate(s).model_dump() if s else None,
         "exporte_le": date.today().isoformat(),
-        "membres": [{k: l[k] for k in ("rang", "nom", "prenom", "classe", "adresse_mail", "presences", "points")}
+        "membres": [{k: l[k] for k in ("rang", "nom", "prenom", "classe", "adresse_mail", "presences", "bonus", "points")}
                     for l in lignes],
     }
     return StreamingResponse(

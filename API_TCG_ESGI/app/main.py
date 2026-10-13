@@ -8,7 +8,7 @@ from sqlalchemy import text
 
 from . import config
 from .database import engine
-from .routers import auth, discord, me, participations, seances, semestres, stats_exports, users
+from .routers import ajustements, auth, discord, journal, me, participations, seances, semestres, stats_exports, users
 
 logging.basicConfig(level=logging.DEBUG if config.DEBUG else logging.INFO)
 log = logging.getLogger("arcanix")
@@ -24,8 +24,9 @@ app.add_middleware(
     expose_headers=["X-Total-Count", "Content-Disposition"],
 )
 
-for r in (auth, users, semestres, seances, participations, me, stats_exports, discord):
+for r in (auth, users, semestres, seances, participations, me, stats_exports, discord, ajustements, journal):
     app.include_router(r.router)
+app.include_router(auth.config_router)
 
 
 @app.exception_handler(RequestValidationError)

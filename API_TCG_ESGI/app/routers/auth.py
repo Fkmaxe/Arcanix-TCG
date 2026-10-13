@@ -1,11 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
 
+from .. import config
 from ..database import get_db
+from ..mail import mail_reinitialisation
 from ..ratelimit import connexion, ip_client
 from ..models import Utilisateur
-from ..schemas import DefinirMotDePasse, LoginRequest, MeOut, Token
-from ..security import consommer_jeton, create_token, get_current_user, hash_password, verify_password
+from ..schemas import ConfigPublique, DefinirMotDePasse, LoginRequest, MeOut, MotDePasseOublie, Token
+from ..security import consommer_jeton, create_token, get_current_user, hash_password, lien_mot_de_passe, verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -50,3 +52,30 @@ def definir_mot_de_passe(body: DefinirMotDePasse, request: Request, db: Session 
 @router.get("/me", response_model=MeOut)
 def me(user: Utilisateur = Depends(get_current_user)):
     return me_out(user)
+
+
+@router.post("/mot-de-passe-oublie", status_code=202)
+def mot_de_passe_oublie(body: MotDePasseOublie, request: Request, background: BackgroundTasks,
+                        db: Session = Depends(get_db)):
+    """Envoie un lien de réinitialisation. Réponse identique que l'email existe ou non (pas d'énumération)."""
+    if not config.SMTP_ACTIF:
+        raise HTTPException(503, "L'envoi d'emails n'est pas configuré : utilise /reinitialiser sur Discord "
+                                 "ou demande un lien à la modération.")
+    cle = f"{ip_client(request)}|oubli|{body.email}"
+    connexion.verifier(cle)
+    connexion.echec(cle)  # chaque demande compte : 10 max par quart d'heure
+    user = db.query(Utilisateur).filter(Utilisateur.adresse_mail == body.email).first()
+    if user:
+        url, heures = lien_mot_de_passe(db, user)
+        db.commit()
+        background.add_task(mail_reinitialisation, user.adresse_mail, user.prenom, url, heures)
+    return {"message": "Si un compte existe pour cet email, un lien vient d'y être envoyé."}
+
+
+config_router = APIRouter(tags=["config"])
+
+
+@config_router.get("/config", response_model=ConfigPublique)
+def config_publique():
+    """Fonctionnalités disponibles, pour adapter l'interface."""
+    return ConfigPublique(smtp=config.SMTP_ACTIF, qr_periode_s=config.QR_PERIODE_S)

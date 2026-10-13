@@ -5,6 +5,7 @@ from sqlalchemy import (
     Boolean, CheckConstraint, Date, DateTime, ForeignKey, Integer, Numeric, SmallInteger,
     String, Text, Time, UniqueConstraint, func,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .database import Base
@@ -55,7 +56,17 @@ class Seance(Base):
     semestre_id: Mapped[int] = mapped_column(ForeignKey("semestre.id", ondelete="RESTRICT"), nullable=False)
     annonce_envoyee: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     rappel_envoye: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
-    __table_args__ = (CheckConstraint("nb_point >= 0", name="seance_nb_point_check"),)
+    # Inscriptions : None = places illimitées
+    places_max: Mapped[int | None] = mapped_column(Integer)
+    # Pointage par QR code : secret de la séance et fin de validité
+    pointage_secret: Mapped[str | None] = mapped_column(String(64))
+    pointage_expire_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Résultats de tournoi publiés mais pas encore annoncés sur Discord
+    resultats_a_annoncer: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    __table_args__ = (
+        CheckConstraint("nb_point >= 0", name="seance_nb_point_check"),
+        CheckConstraint("places_max IS NULL OR places_max > 0", name="seance_places_max_check"),
+    )
 
     semestre: Mapped["Semestre"] = relationship(back_populates="seances")
     participants: Mapped[list["Participation"]] = relationship(back_populates="seance", passive_deletes=True)
@@ -83,3 +94,71 @@ class Jeton(Base):
     utilise_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
     utilisateur: Mapped["Utilisateur"] = relationship()
+
+
+class Inscription(Base):
+    """« Je viens » : inscription à une séance (avec liste d'attente si complet)."""
+    __tablename__ = "inscription"
+    utilisateur_id: Mapped[int] = mapped_column(ForeignKey("utilisateur.id", ondelete="CASCADE"), primary_key=True)
+    seance_id: Mapped[int] = mapped_column(ForeignKey("seance.id", ondelete="CASCADE"), primary_key=True)
+    statut: Mapped[str] = mapped_column(String(10), nullable=False, default="inscrit")  # 'inscrit' | 'attente'
+    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    utilisateur: Mapped["Utilisateur"] = relationship()
+
+
+class Pointage(Base):
+    """Présence déclarée par le membre via QR code, en attente de validation par la modération."""
+    __tablename__ = "pointage"
+    utilisateur_id: Mapped[int] = mapped_column(ForeignKey("utilisateur.id", ondelete="CASCADE"), primary_key=True)
+    seance_id: Mapped[int] = mapped_column(ForeignKey("seance.id", ondelete="CASCADE"), primary_key=True)
+    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class Ajustement(Base):
+    """Points bonus (>0) ou malus (<0) hors présence, toujours motivés."""
+    __tablename__ = "ajustement"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    utilisateur_id: Mapped[int] = mapped_column(ForeignKey("utilisateur.id", ondelete="CASCADE"), nullable=False)
+    semestre_id: Mapped[int] = mapped_column(ForeignKey("semestre.id", ondelete="RESTRICT"), nullable=False)
+    # Renseigné pour les bonus générés par les résultats d'un tournoi
+    seance_id: Mapped[int | None] = mapped_column(ForeignKey("seance.id", ondelete="CASCADE"))
+    points: Mapped[Decimal] = mapped_column(Numeric(6, 2), nullable=False)
+    categorie: Mapped[str] = mapped_column(String(20), nullable=False, default="autre")
+    motif: Mapped[str] = mapped_column(String(300), nullable=False)
+    cree_par_id: Mapped[int | None] = mapped_column(ForeignKey("utilisateur.id", ondelete="SET NULL"))
+    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    __table_args__ = (CheckConstraint("points <> 0", name="ajustement_points_check"),)
+
+    utilisateur: Mapped["Utilisateur"] = relationship(foreign_keys=[utilisateur_id])
+    cree_par: Mapped["Utilisateur | None"] = relationship(foreign_keys=[cree_par_id])
+    semestre: Mapped["Semestre"] = relationship()
+
+
+class Resultat(Base):
+    """Classement final d'un membre à un tournoi."""
+    __tablename__ = "resultat"
+    seance_id: Mapped[int] = mapped_column(ForeignKey("seance.id", ondelete="CASCADE"), primary_key=True)
+    utilisateur_id: Mapped[int] = mapped_column(ForeignKey("utilisateur.id", ondelete="CASCADE"), primary_key=True)
+    place: Mapped[int] = mapped_column(Integer, nullable=False)
+    victoires: Mapped[int | None] = mapped_column(Integer)
+    defaites: Mapped[int | None] = mapped_column(Integer)
+    nuls: Mapped[int | None] = mapped_column(Integer)
+    deck: Mapped[str | None] = mapped_column(String(120))
+    __table_args__ = (CheckConstraint("place > 0", name="resultat_place_check"),)
+
+    utilisateur: Mapped["Utilisateur"] = relationship()
+
+
+class Journal(Base):
+    """Historique des actions sensibles (présences, points, rôles…)."""
+    __tablename__ = "journal"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    auteur_id: Mapped[int | None] = mapped_column(ForeignKey("utilisateur.id", ondelete="SET NULL"))
+    auteur_nom: Mapped[str] = mapped_column(String(210), nullable=False)  # copie : reste lisible si l'auteur est supprimé
+    action: Mapped[str] = mapped_column(String(40), nullable=False)
+    resume: Mapped[str] = mapped_column(String(500), nullable=False)
+    membre_id: Mapped[int | None] = mapped_column(ForeignKey("utilisateur.id", ondelete="SET NULL"), index=True)
+    seance_id: Mapped[int | None] = mapped_column(ForeignKey("seance.id", ondelete="SET NULL"), index=True)
+    details: Mapped[dict | None] = mapped_column(JSONB)

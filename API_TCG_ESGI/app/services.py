@@ -5,9 +5,10 @@ from typing import Iterable
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
-from .models import Participation, Seance, Semestre, Utilisateur
+from .models import Ajustement, Inscription, Participation, Pointage, Resultat, Seance, Semestre, Utilisateur
 from .schemas import (
-    LigneClassement, ParticipantDetail, PointEvolution, SeanceDetail, SeanceOut, SemestreOut,
+    InscritDetail, LigneClassement, ParticipantDetail, PointageDetail, PointEvolution, ResultatOut, SeanceDetail,
+    SeanceOut, SemestreOut,
 )
 
 
@@ -37,26 +38,91 @@ def _compteurs(db: Session, ids: list[int]) -> dict[int, tuple[int, int]]:
     return {r[0]: (r[1], r[2]) for r in rows}
 
 
-def seances_out(db: Session, seances: Iterable[Seance]) -> list[SeanceOut]:
+def _compteurs_inscriptions(db: Session, ids: list[int]) -> dict[int, tuple[int, int]]:
+    if not ids:
+        return {}
+    rows = db.execute(
+        select(
+            Inscription.seance_id,
+            func.count().filter(Inscription.statut == "inscrit"),
+            func.count().filter(Inscription.statut == "attente"),
+        ).where(Inscription.seance_id.in_(ids)).group_by(Inscription.seance_id)
+    ).all()
+    return {r[0]: (r[1], r[2]) for r in rows}
+
+
+def seances_out(db: Session, seances: Iterable[Seance], viewer: Utilisateur | None = None) -> list[SeanceOut]:
     seances = list(seances)
-    cpt = _compteurs(db, [s.id for s in seances])
+    ids = [s.id for s in seances]
+    cpt = _compteurs(db, ids)
+    ins = _compteurs_inscriptions(db, ids)
+    mes_inscriptions: dict[int, str] = {}
+    if viewer and ids:
+        mes_inscriptions = dict(db.execute(
+            select(Inscription.seance_id, Inscription.statut)
+            .where(Inscription.utilisateur_id == viewer.id, Inscription.seance_id.in_(ids))
+        ).all())
+    avec_resultats = set(db.execute(
+        select(Resultat.seance_id).where(Resultat.seance_id.in_(ids)).distinct()
+    ).scalars()) if ids else set()
     out = []
     for s in seances:
         total, presents = cpt.get(s.id, (0, 0))
         o = SeanceOut.model_validate(s)
         o.semestre = SemestreOut.model_validate(s.semestre) if s.semestre else None
         o.nb_participants, o.nb_presents = total, presents
+        o.nb_inscrits, o.nb_attente = ins.get(s.id, (0, 0))
+        o.mon_inscription = mes_inscriptions.get(s.id)
+        o.a_resultats = s.id in avec_resultats
         out.append(o)
     return out
 
 
-def seance_out(db: Session, s: Seance) -> SeanceOut:
-    return seances_out(db, [s])[0]
+def seance_out(db: Session, s: Seance, viewer: Utilisateur | None = None) -> SeanceOut:
+    return seances_out(db, [s], viewer)[0]
+
+
+def resultats_out(db: Session, seance_id: int, viewer: Utilisateur | None, staff: bool) -> list[ResultatOut]:
+    bonus = dict(db.execute(
+        select(Ajustement.utilisateur_id, Ajustement.points)
+        .where(Ajustement.seance_id == seance_id, Ajustement.categorie == "tournoi")
+    ).all())
+    rows = (db.query(Resultat, Utilisateur).join(Utilisateur, Utilisateur.id == Resultat.utilisateur_id)
+            .filter(Resultat.seance_id == seance_id).order_by(Resultat.place, Utilisateur.prenom).all())
+    return [
+        ResultatOut(
+            utilisateur_id=u.id, prenom=u.prenom, nom=u.nom if staff else f"{u.nom[:1].upper()}.",
+            place=r.place, victoires=r.victoires, defaites=r.defaites, nuls=r.nuls, deck=r.deck,
+            bonus=float(bonus.get(u.id, 0)), moi=bool(viewer and viewer.id == u.id),
+        )
+        for r, u in rows
+    ]
 
 
 def seance_detail(db: Session, s: Seance, viewer: Utilisateur | None, staff: bool) -> SeanceDetail:
-    base = seance_out(db, s)
+    from .vie import pointage_ouvert  # import local : évite un cycle services <-> vie
+
+    base = seance_out(db, s, viewer)
     d = SeanceDetail(**base.model_dump())
+    d.pointage_ouvert = pointage_ouvert(s)
+    d.resultats = resultats_out(db, s.id, viewer, staff)
+    if viewer:
+        d.mon_pointage = db.get(Pointage, {"utilisateur_id": viewer.id, "seance_id": s.id}) is not None
+    if staff:
+        inscrits = (db.query(Inscription, Utilisateur).join(Utilisateur, Utilisateur.id == Inscription.utilisateur_id)
+                    .filter(Inscription.seance_id == s.id).order_by(Inscription.statut.desc(), Inscription.cree_le).all())
+        d.inscrits = [
+            InscritDetail(utilisateur_id=u.id, prenom=u.prenom, nom=u.nom, classe=u.classe, discord_lie=bool(u.discord_id),
+                          statut=i.statut, cree_le=i.cree_le)
+            for i, u in inscrits
+        ]
+        pointages = (db.query(Pointage, Utilisateur).join(Utilisateur, Utilisateur.id == Pointage.utilisateur_id)
+                     .filter(Pointage.seance_id == s.id).order_by(Pointage.cree_le).all())
+        d.pointages = [
+            PointageDetail(utilisateur_id=u.id, prenom=u.prenom, nom=u.nom, classe=u.classe,
+                           discord_lie=bool(u.discord_id), cree_le=p.cree_le)
+            for p, u in pointages
+        ]
     rows = (
         db.query(Participation, Utilisateur)
         .join(Utilisateur, Utilisateur.id == Participation.utilisateur_id)
@@ -99,6 +165,13 @@ def rang_competition(lignes: list[dict]) -> None:
         l["rang"] = rang
 
 
+def bonus_par_membre(db: Session, semestre_id: int | None) -> dict[int, float]:
+    q = select(Ajustement.utilisateur_id, func.sum(Ajustement.points)).group_by(Ajustement.utilisateur_id)
+    if semestre_id:
+        q = q.where(Ajustement.semestre_id == semestre_id)
+    return {uid: float(total) for uid, total in db.execute(q).all()}
+
+
 def classement(
     db: Session,
     semestre_id: int | None,
@@ -128,16 +201,17 @@ def classement(
     if user_id:
         q = q.where(Utilisateur.id == user_id)
     rows = db.execute(q).all()
-    lignes = [
-        {
+    bonus = bonus_par_membre(db, semestre_id)
+    lignes = []
+    for r in rows:
+        b = bonus.get(r.id, 0.0)
+        lignes.append({
             "userId": r.id, "nom": r.nom, "prenom": r.prenom, "classe": r.classe,
             "adresse_mail": r.adresse_mail, "discord_id": r.discord_id,
-            "points": float(r.points or 0), "presences": int(r.presences or 0),
-        }
-        for r in rows
-    ]
+            "points": round(float(r.points or 0) + b, 2), "presences": int(r.presences or 0), "bonus": b,
+        })
     if not inclure_zero:
-        lignes = [l for l in lignes if l["presences"] > 0 or l["points"] > 0]
+        lignes = [l for l in lignes if l["presences"] > 0 or l["points"] != 0 or l["bonus"] != 0]
     lignes.sort(key=lambda l: (-l["points"], -l["presences"], l["prenom"].lower(), l["nom"].lower()))
     rang_competition(lignes)
     return lignes
@@ -149,7 +223,7 @@ def lignes_publiques(lignes: list[dict], viewer_id: int | None, staff: bool) -> 
         nom = l["nom"] if staff else (l["nom"][:1].upper() + "." if l["nom"] else "")
         out.append(LigneClassement(
             rang=l["rang"], userId=l["userId"], prenom=l["prenom"], nom=nom, classe=l["classe"],
-            points=l["points"], presences=l["presences"], moi=l["userId"] == viewer_id,
+            points=l["points"], presences=l["presences"], bonus=l.get("bonus", 0), moi=l["userId"] == viewer_id,
         ))
     return out
 
@@ -172,10 +246,14 @@ def stats_membre(db: Session, user: Utilisateur, semestre: Semestre | None) -> d
         .order_by(Seance.date_seance, Seance.id)
         .all()
     )
+    evenements = [(r.date_seance, 0, r.nom, float(r.nb_point), "presence") for r in rows]
+    for a in db.query(Ajustement).filter(Ajustement.utilisateur_id == user.id, Ajustement.semestre_id == semestre.id):
+        evenements.append((a.cree_le.date(), 1, a.motif, float(a.points), "ajustement"))
+    evenements.sort(key=lambda e: (e[0], e[1]))
     cumul, evolution = 0.0, []
-    for r in rows:
-        cumul += float(r.nb_point)
-        evolution.append(PointEvolution(date=r.date_seance, seance=r.nom, points=float(r.nb_point), cumul=cumul))
+    for jour, _, libelle, pts, type_ in evenements:
+        cumul = round(cumul + pts, 2)
+        evolution.append(PointEvolution(date=jour, seance=libelle, points=pts, cumul=cumul, type=type_))
     presences = moi["presences"] if moi else 0
     return {
         "semestre": SemestreOut.model_validate(semestre),
@@ -190,6 +268,23 @@ def stats_membre(db: Session, user: Utilisateur, semestre: Semestre | None) -> d
 
 
 def points_par_semestre(db: Session, user_id: int) -> list[dict]:
+    presences = _points_presences_par_semestre(db, user_id)
+    bonus = dict(db.execute(
+        select(Ajustement.semestre_id, func.sum(Ajustement.points))
+        .where(Ajustement.utilisateur_id == user_id).group_by(Ajustement.semestre_id)
+    ).all())
+    ids = {p["semestre_id"] for p in presences} | set(bonus)
+    if not ids:
+        return []
+    par_id = {p["semestre_id"]: p for p in presences}
+    out = []
+    for sem in db.query(Semestre).filter(Semestre.id.in_(ids)).order_by(Semestre.annee.desc(), Semestre.numero.desc()):
+        pts = par_id.get(sem.id, {}).get("points", 0.0) + float(bonus.get(sem.id, 0))
+        out.append({"semestre_id": sem.id, "annee": sem.annee, "numero": sem.numero, "points": round(pts, 2)})
+    return out
+
+
+def _points_presences_par_semestre(db: Session, user_id: int) -> list[dict]:
     rows = db.execute(
         select(
             Semestre.id, Semestre.annee, Semestre.numero,

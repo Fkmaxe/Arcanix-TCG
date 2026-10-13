@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import Participation, Seance, Utilisateur
-from ..schemas import CodeDiscord, MaParticipation, MeOut, MesStats, MeUpdate, MyPointsOut, PasswordChange
+from ..models import Ajustement, Participation, Seance, Utilisateur
+from ..schemas import CodeDiscord, MaParticipation, MeOut, MesStats, MeUpdate, MonAjustement, MyPointsOut, PasswordChange
 from ..security import creer_jeton, get_current_user, hash_password, verify_password
 from ..services import points_par_semestre, resoudre_semestre, stats_membre
 from .auth import me_out
@@ -75,3 +75,16 @@ def code_discord(db: Session = Depends(get_db), user: Utilisateur = Depends(get_
 def delier_discord(db: Session = Depends(get_db), user: Utilisateur = Depends(get_current_user)):
     user.discord_id = None
     db.commit()
+
+
+@router.get("/ajustements", response_model=list[MonAjustement])
+def mes_ajustements(semestreId: int | None = None, db: Session = Depends(get_db),
+                    user: Utilisateur = Depends(get_current_user)):
+    q = db.query(Ajustement).filter(Ajustement.utilisateur_id == user.id)
+    if semestreId:
+        q = q.filter(Ajustement.semestre_id == semestreId)
+    return [
+        MonAjustement(id=a.id, points=float(a.points), categorie=a.categorie, motif=a.motif,
+                      semestre_id=a.semestre_id, seance_id=a.seance_id, cree_le=a.cree_le)
+        for a in q.order_by(Ajustement.cree_le.desc())
+    ]

@@ -26,3 +26,17 @@ DISCORD_WEBHOOK_URL = os.getenv("DISCORD_WEBHOOK_URL", "")
 # Durées de validité des jetons
 JETON_MDP_HEURES = int(os.getenv("JETON_MDP_HEURES", "48"))
 JETON_DISCORD_MINUTES = int(os.getenv("JETON_DISCORD_MINUTES", "15"))
+
+# Emails (SMTP). Sans SMTP_HOST, les fonctions d'email sont désactivées.
+SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
+SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
+SMTP_USER = os.getenv("SMTP_USER", "")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD", "")
+SMTP_FROM = os.getenv("SMTP_FROM", "Arcanix <no-reply@arcanix.local>")
+# 'starttls' (port 587), 'ssl' (port 465) ou 'aucune' (relais local / Mailpit)
+SMTP_SECURITE = os.getenv("SMTP_SECURITE", "starttls").strip().lower()
+SMTP_ACTIF = bool(SMTP_HOST)
+
+# Pointage par QR code
+QR_PERIODE_S = int(os.getenv("QR_PERIODE_S", "30"))
+POINTAGE_DUREE_H = int(os.getenv("POINTAGE_DUREE_H", "4"))

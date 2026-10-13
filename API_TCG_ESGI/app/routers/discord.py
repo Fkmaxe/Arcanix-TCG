@@ -1,21 +1,25 @@
 """Routes réservées au bot Discord (en-tête x-bot-token obligatoire)."""
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from ..database import get_db
 from ..models import Participation, Seance, Semestre, Utilisateur
+from .. import vie
+from ..journal import journaliser
 from ..schemas import (
-    Annonce, AnnonceAck, Classement, DiscordIdBody, DiscordInscription, DiscordLier, DiscordMembre,
-    DiscordPresences, DiscordPresencesOut, DiscordSeanceCreate, LienMotDePasse, MaParticipation, SeanceOut,
-    SemestreOut,
+    AjustementOut, Annonce, AnnonceAck, Classement, DiscordAjustement, DiscordIdBody, DiscordInscription,
+    DiscordInscriptionOut, DiscordLier, DiscordMembre, DiscordPresences, DiscordPresencesOut, DiscordRegister,
+    DiscordRoles, DiscordSeanceCreate, LienMotDePasse, MaParticipation, SeanceOut, SemestreOut,
 )
+from .ajustements import ajustement_out, creer_ajustement
+from .seances import notifier_promus
 from ..security import consommer_jeton, lien_mot_de_passe, unusable_password_hash, verify_bot_token
 from ..services import (
-    classement, lignes_publiques, points_par_semestre, resoudre_semestre, seance_out, seances_out,
+    classement, lignes_publiques, points_par_semestre, resoudre_semestre, resultats_out, seance_out, seances_out,
     semestre_actif, stats_membre,
 )
 
@@ -38,7 +42,7 @@ def _moderateur(db: Session, discord_id: str) -> Utilisateur:
 
 # --- Compte --------------------------------------------------------------------------
 @router.post("/inscription", response_model=LienMotDePasse, status_code=201)
-def inscription(body: DiscordInscription, db: Session = Depends(get_db)):
+def inscription(body: DiscordRegister, db: Session = Depends(get_db)):
     if db.query(Utilisateur).filter(Utilisateur.discord_id == body.discord_id).first():
         raise HTTPException(409, "Ce compte Discord est déjà inscrit")
     if db.query(Utilisateur).filter(func.lower(Utilisateur.adresse_mail) == body.adresse_mail).first():
@@ -55,6 +59,8 @@ def inscription(body: DiscordInscription, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(409, "Compte déjà existant")
     url, heures = lien_mot_de_passe(db, user)
+    journaliser(db, user, "membre.inscription_discord", f"{user.prenom} {user.nom} s'est inscrit·e via Discord",
+                membre_id=user.id)
     db.commit()
     return LienMotDePasse(url=url, expire_dans_heures=heures)
 
@@ -67,6 +73,7 @@ def lier(body: DiscordLier, db: Session = Depends(get_db)):
         db.rollback()
         raise HTTPException(409, "Ce compte Discord est déjà lié à un autre compte Arcanix")
     user.discord_id = body.discord_id
+    journaliser(db, user, "membre.liaison_discord", f"{user.prenom} {user.nom} a lié son compte Discord", membre_id=user.id)
     db.commit()
     return _profil(db, user)
 
@@ -165,20 +172,23 @@ def seances_recherche(q: str | None = None, db: Session = Depends(get_db)):
 # --- Modération ------------------------------------------------------------------------
 @router.post("/seances", response_model=SeanceOut, status_code=201)
 def creer_seance(body: DiscordSeanceCreate, db: Session = Depends(get_db)):
-    _moderateur(db, body.auteur_discord_id)
+    auteur = _moderateur(db, body.auteur_discord_id)
     semestre = resoudre_semestre(db, body.semestre_id)
     if not semestre:
         raise HTTPException(422, "Aucun semestre défini : créez-en un sur le site")
     data = body.model_dump(exclude={"auteur_discord_id", "semestre_id"})
     s = Seance(**data, semestre_id=semestre.id)
     db.add(s)
+    db.flush()
+    journaliser(db, auteur, "seance.creation", f"Séance « {s.nom} » du {s.date_seance:%d/%m/%Y} créée depuis Discord",
+                seance_id=s.id)
     db.commit()
     return seance_out(db, s)
 
 
 @router.post("/seances/{sid}/presences", response_model=DiscordPresencesOut)
 def presences(sid: int, body: DiscordPresences, db: Session = Depends(get_db)):
-    _moderateur(db, body.auteur_discord_id)
+    auteur = _moderateur(db, body.auteur_discord_id)
     s = db.get(Seance, sid)
     if not s:
         raise HTTPException(404, "Séance introuvable")
@@ -194,12 +204,17 @@ def presences(sid: int, body: DiscordPresences, db: Session = Depends(get_db)):
         p = existants.get(u.id)
         if p and p.present:
             deja.append(did)
-        elif p:
+            continue
+        avant = p.present if p else None
+        if p:
             p.present = True
-            ajoutes.append(did)
         else:
             db.add(Participation(utilisateur_id=u.id, seance_id=sid, present=True))
-            ajoutes.append(did)
+        ajoutes.append(did)
+        journaliser(db, auteur, "presence.ajout" if not p else "presence.modification",
+                    f"{u.prenom} {u.nom} présent·e à « {s.nom} » (+{float(s.nb_point):g} pts, via Discord)",
+                    membre_id=u.id, seance_id=s.id, details={"avant": avant, "apres": True,
+                                                             "points": float(s.nb_point)})
     db.commit()
     return DiscordPresencesOut(seance=seance_out(db, s), ajoutes=ajoutes, deja_presents=deja, non_lies=non_lies)
 
@@ -223,6 +238,11 @@ def annonces_en_attente(db: Session = Depends(get_db)):
     for s in seances_out(db, rappels):
         annonces.append(Annonce(type="rappel", id=s.id, seance=s))
 
+    tournois = (db.query(Seance).options(joinedload(Seance.semestre))
+                .filter(Seance.resultats_a_annoncer.is_(True)).order_by(Seance.date_seance).limit(5).all())
+    for s in seances_out(db, tournois):
+        annonces.append(Annonce(type="resultats", id=s.id, seance=s, resultats=resultats_out(db, s.id, None, False)[:8]))
+
     for sem in db.query(Semestre).filter(Semestre.podium_annonce.is_(False), Semestre.actif.is_(False)):
         lignes = classement(db, sem.id)[:3]
         annonces.append(Annonce(type="podium", id=sem.id, semestre=SemestreOut.model_validate(sem),
@@ -241,7 +261,9 @@ def annonces_ack(body: list[AnnonceAck], db: Session = Depends(get_db)):
         s = db.get(Seance, a.id)
         if not s:
             continue
-        if a.type == "nouvelle_seance":
+        if a.type == "resultats":
+            s.resultats_a_annoncer = False
+        elif a.type == "nouvelle_seance":
             s.annonce_envoyee = True
             # Séance créée la veille : l'annonce fait office de rappel
             if s.date_seance <= date.today() + timedelta(days=1):
@@ -249,3 +271,48 @@ def annonces_ack(body: list[AnnonceAck], db: Session = Depends(get_db)):
         else:
             s.rappel_envoye = True
     db.commit()
+
+
+
+# --- Inscriptions par bouton (« Je viens ») ------------------------------------------------------
+@router.post("/seances/{sid}/inscription", response_model=DiscordInscriptionOut)
+def inscription_seance(sid: int, body: DiscordInscription, background: BackgroundTasks, db: Session = Depends(get_db)):
+    user = _membre(db, body.discord_id)
+    s = db.get(Seance, sid, options=[joinedload(Seance.semestre)])
+    if not s:
+        raise HTTPException(404, "Séance introuvable")
+    promus = []
+    if body.action == "in":
+        statut = vie.inscrire(db, s, user)
+    else:
+        promus = vie.desinscrire(db, s, user)
+        statut = None
+    db.commit()
+    notifier_promus(background, s, promus)
+    return DiscordInscriptionOut(statut=statut, seance=seance_out(db, s, user),
+                                 promus=[u.discord_id for u in promus if u.discord_id])
+
+
+# --- Bonus / malus ---------------------------------------------------------------------------
+@router.post("/ajustements", response_model=AjustementOut, status_code=201)
+def ajustement(body: DiscordAjustement, db: Session = Depends(get_db)):
+    auteur = _moderateur(db, body.auteur_discord_id)
+    cible = db.query(Utilisateur).filter(Utilisateur.discord_id == body.discord_id).first()
+    if not cible:
+        raise HTTPException(404, "Ce membre n'a pas lié son compte Arcanix")
+    if body.points == 0:
+        raise HTTPException(422, "Les points doivent être différents de 0")
+    a = creer_ajustement(db, auteur, cible, round(body.points, 2), body.motif.strip(), body.categorie, semestre_actif(db))
+    db.commit()
+    db.refresh(a)
+    return ajustement_out(a)
+
+
+# --- Rôles automatiques -------------------------------------------------------------------------
+@router.get("/roles", response_model=DiscordRoles)
+def roles(db: Session = Depends(get_db)):
+    """Comptes liés (rôle Membre) et top 3 du semestre en cours (rôle spécial)."""
+    lies = [d for (d,) in db.query(Utilisateur.discord_id).filter(Utilisateur.discord_id.isnot(None))]
+    sem = semestre_actif(db)
+    top3 = [l["discord_id"] for l in classement(db, sem.id) if l["rang"] <= 3 and l["discord_id"]] if sem else []
+    return DiscordRoles(membres=lies, top3=top3)

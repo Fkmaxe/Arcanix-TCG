@@ -1,13 +1,16 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
+from .. import config
 from ..database import get_db
+from ..journal import journaliser, nom_complet
+from ..mail import mail_invitation, mail_reinitialisation
 from ..models import Utilisateur
 from ..schemas import LienMotDePasse, PasswordChange, UserCreate, UserOut, UserUpdate
 from ..security import (
     get_current_user, get_current_user_optional, hash_password, lien_mot_de_passe, require_roles,
-    verify_password,
+    unusable_password_hash, verify_password,
 )
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -67,7 +70,7 @@ def get_user(user_id: int, db: Session = Depends(get_db), current: Utilisateur =
 
 
 @router.post("", response_model=UserOut, status_code=201)
-def create_user(body: UserCreate, db: Session = Depends(get_db),
+def create_user(body: UserCreate, background: BackgroundTasks, db: Session = Depends(get_db),
                 current: Utilisateur | None = Depends(get_current_user_optional)):
     """Inscription publique (rôle forcé à « user ») ou création par la modération."""
     if current and current.role_utilisateur not in ("admin", "moderator"):
@@ -79,13 +82,26 @@ def create_user(body: UserCreate, db: Session = Depends(get_db),
     if current and current.role_utilisateur == "moderator" and role != "user":
         raise HTTPException(403, "Seul un admin peut attribuer ce rôle")
 
+    invitation = bool(current) and body.envoyer_invitation
+    if invitation and not config.SMTP_ACTIF:
+        raise HTTPException(409, "L'envoi d'emails n'est pas configuré : indique un mot de passe provisoire")
+    if not invitation and not body.password:
+        raise HTTPException(422, "Mot de passe requis (8 caractères minimum)")
+
     user = Utilisateur(
         nom=body.nom, prenom=body.prenom, adresse_mail=body.adresse_mail, classe=body.classe,
-        role_utilisateur=role, mot_de_passe_hash=hash_password(body.password),
+        role_utilisateur=role,
+        mot_de_passe_hash=unusable_password_hash() if invitation else hash_password(body.password),
         # Un compte créé par la modération doit choisir son propre mot de passe
         doit_changer_mdp=bool(current),
     )
     db.add(user)
+    db.flush()
+    if current:
+        journaliser(db, current, "membre.creation", f"Compte de {user.prenom} {user.nom} créé ({role})", membre_id=user.id)
+    if invitation:
+        url, heures = lien_mot_de_passe(db, user)
+        background.add_task(mail_invitation, user.adresse_mail, user.prenom, url, heures, nom_complet(current))
     db.commit()
     return user
 
@@ -110,8 +126,16 @@ def update_user(user_id: int, body: UserUpdate, db: Session = Depends(get_db),
 
     if "adresse_mail" in data and _email_pris(db, data["adresse_mail"], user_id):
         raise HTTPException(409, "Email déjà utilisé")
+    changements = {k: [getattr(user, k), v] for k, v in data.items() if getattr(user, k) != v}
     for k, v in data.items():
         setattr(user, k, v)
+    if "role_utilisateur" in changements:
+        avant, apres = changements["role_utilisateur"]
+        journaliser(db, current, "membre.role", f"Rôle de {user.prenom} {user.nom} : {avant} → {apres}",
+                    membre_id=user.id, details={"avant": avant, "apres": apres})
+    elif changements:
+        journaliser(db, current, "membre.modification", f"Profil de {user.prenom} {user.nom} modifié ({', '.join(changements)})",
+                    membre_id=user.id, details={k: {"avant": a, "apres": b} for k, (a, b) in changements.items()})
     db.commit()
     return user
 
@@ -124,6 +148,8 @@ def delete_user(user_id: int, db: Session = Depends(get_db),
         raise HTTPException(404, "Utilisateur introuvable")
     if user.id == current.id:
         raise HTTPException(409, "Vous ne pouvez pas supprimer votre propre compte")
+    journaliser(db, current, "membre.suppression", f"Compte de {user.prenom} {user.nom} ({user.adresse_mail}) supprimé",
+                details={"utilisateur_id": user.id})
     db.delete(user)
     db.commit()
 
@@ -148,11 +174,14 @@ def change_password(user_id: int, body: PasswordChange, db: Session = Depends(ge
     user.mot_de_passe_hash = hash_password(body.new_password)
     # Mot de passe fixé par quelqu'un d'autre : le membre devra le changer
     user.doit_changer_mdp = current.id != user_id
+    if current.id != user_id:
+        journaliser(db, current, "membre.mdp", f"Mot de passe provisoire défini pour {user.prenom} {user.nom}",
+                    membre_id=user.id)
     db.commit()
 
 
 @router.post("/{user_id}/lien-mot-de-passe", response_model=LienMotDePasse)
-def generer_lien_mdp(user_id: int, db: Session = Depends(get_db),
+def generer_lien_mdp(user_id: int, background: BackgroundTasks, envoyer: bool = False, db: Session = Depends(get_db),
                      current: Utilisateur = Depends(require_roles("admin", "moderator"))):
     """Lien de réinitialisation à transmettre au membre (pas d'email sortant)."""
     user = db.get(Utilisateur, user_id)
@@ -160,6 +189,12 @@ def generer_lien_mdp(user_id: int, db: Session = Depends(get_db),
         raise HTTPException(404, "Utilisateur introuvable")
     if current.role_utilisateur == "moderator" and user.role_utilisateur != "user":
         raise HTTPException(403, "Un modérateur ne peut modifier que des membres")
+    if envoyer and not config.SMTP_ACTIF:
+        raise HTTPException(409, "L'envoi d'emails n'est pas configuré")
     url, heures = lien_mot_de_passe(db, user)
+    journaliser(db, current, "membre.lien_mdp", f"Lien de mot de passe généré pour {user.prenom} {user.nom}"
+                + (" (envoyé par email)" if envoyer else ""), membre_id=user.id)
     db.commit()
-    return LienMotDePasse(url=url, expire_dans_heures=heures)
+    if envoyer:
+        background.add_task(mail_reinitialisation, user.adresse_mail, user.prenom, url, heures)
+    return LienMotDePasse(url=url, expire_dans_heures=heures, email_envoye=envoyer)
