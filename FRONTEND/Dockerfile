@@ -1,33 +1,29 @@
-# Étape 1 : Build du projet avec Node.js (builder)
-FROM node:18-alpine AS builder
-
-# Définir le répertoire de travail
+# --- Dépendances --------------------------------------------------------------
+FROM node:22-alpine AS deps
 WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
 
-# Copier les fichiers de dépendances
-COPY package.json package-lock.json* ./
-
-# Installer les dépendances sans les devDependencies
-RUN npm install --frozen-lockfile
-
-# Copier tout le reste du code
+# --- Build --------------------------------------------------------------------
+FROM node:22-alpine AS builder
+WORKDIR /app
+ARG NEXT_PUBLIC_API_BASE=http://localhost:8000
+ARG NEXT_PUBLIC_SITE_URL=http://localhost:3000
+ENV NEXT_PUBLIC_API_BASE=$NEXT_PUBLIC_API_BASE \
+    NEXT_PUBLIC_SITE_URL=$NEXT_PUBLIC_SITE_URL \
+    NEXT_TELEMETRY_DISABLED=1
+COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-
-# Build de l'app Next.js
-ENV NEXT_DISABLE_ESLINT=1
 RUN npm run build
 
-# Étape 2 : Image allégée pour servir l'app
-FROM node:18-alpine AS runner
-
+# --- Exécution (sortie standalone, image légère) -------------------------------
+FROM node:22-alpine AS runner
 WORKDIR /app
-
-# Copier uniquement les fichiers nécessaires depuis le builder
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 PORT=3000 HOSTNAME=0.0.0.0
+RUN addgroup -S nodejs && adduser -S nextjs -G nodejs
 COPY --from=builder /app/public ./public
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/package.json ./package.json
-COPY --from=builder /app/node_modules ./node_modules
-
-# Démarrage de l'app Next.js
+COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+USER nextjs
 EXPOSE 3000
-CMD ["npm", "start"]
+CMD ["node", "server.js"]

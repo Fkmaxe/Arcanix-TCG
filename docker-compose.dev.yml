@@ -1,0 +1,15 @@
+# Développement : rechargement à chaud de l'API et du bot, Postgres exposé.
+# docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+services:
+  db:
+    ports:
+      - "5432:5432"
+  api:
+    environment:
+      DEBUG: "true"
+      UVICORN_EXTRA_ARGS: --reload
+    volumes:
+      - ./API_TCG_ESGI:/app
+  discordbot:
+    volumes:
+      - ./BOT_DISCORD:/app
