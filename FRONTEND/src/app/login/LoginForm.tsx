@@ -11,7 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
+import { completerEmail } from "@/lib/format";
 import { errorMessage } from "@/lib/swr";
+import { useConfig } from "@/lib/useConfig";
 
 /** N'autorise que les redirections internes (pas d'open redirect). */
 export const safeNext = (n: string | null) => (n && n.startsWith("/") && !n.startsWith("//") ? n : "/dashboard");
@@ -21,6 +23,7 @@ export default function LoginForm() {
     const router = useRouter();
     const next = safeNext(useSearchParams().get("next"));
     const [email, setEmail] = useState("");
+    const { domaine } = useConfig();
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState<string | null>(null);
@@ -35,7 +38,7 @@ export default function LoginForm() {
         setErr(null);
         setLoading(true);
         try {
-            await login(email.trim(), password);
+            await login(completerEmail(email, domaine), password);
             router.replace(next);
         } catch (e) {
             setErr(errorMessage(e));
@@ -56,7 +59,8 @@ export default function LoginForm() {
                 <form onSubmit={onSubmit} className="space-y-4">
                     <div className="space-y-1.5">
                         <Label htmlFor="email">Email</Label>
-                        <Input id="email" type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="username" autoFocus />
+                        <Input id="email" type="text" inputMode="email" autoCapitalize="none" spellCheck={false} value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="username" autoFocus placeholder="j.dupont ou ton email" />
+                        <p className="text-muted-foreground text-xs">Élève : ton identifiant suffit (j.dupont), @{domaine} est ajouté.</p>
                     </div>
                     <div className="space-y-1.5">
                         <div className="flex items-center justify-between">

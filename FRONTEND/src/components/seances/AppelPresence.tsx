@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SeancesApi, UsersApi } from "@/lib/api";
-import { initials } from "@/lib/format";
+import { initials, classeOuExterne } from "@/lib/format";
 import { useDebounced } from "@/lib/hooks";
 import { errorMessage } from "@/lib/swr";
 import type { SeanceDetail, User } from "@/lib/types";
@@ -62,7 +62,7 @@ export function AppelPresence({ seance, onSaved }: { seance: SeanceDetail; onSav
         if (filtre === "inscrits" && !q) liste = liste.filter((m) => etats.has(m.id) || concernes.has(m.id));
         if (q) {
             const needle = q.toLowerCase();
-            liste = liste.filter((m) => `${m.prenom} ${m.nom} ${m.classe}`.toLowerCase().includes(needle));
+            liste = liste.filter((m) => `${m.prenom} ${m.nom} ${classeOuExterne(m)}`.toLowerCase().includes(needle));
         }
         return liste.sort((a, b) => a.prenom.localeCompare(b.prenom, "fr") || a.nom.localeCompare(b.nom, "fr"));
     }, [seance.participants, seance.inscrits, seance.pointages, annuaire, filtre, q, etats, concernes]);
@@ -178,7 +178,7 @@ export function AppelPresence({ seance, onSaved }: { seance: SeanceDetail; onSav
                             <div className="min-w-0 flex-1">
                                 <p className="truncate text-sm font-medium">{m.prenom} {m.nom}</p>
                                 <p className="text-muted-foreground flex items-center gap-1.5 truncate text-xs">
-                                    {m.classe}
+                                    {classeOuExterne(m)}
                                     {m.discord_lie && <MessageCircle className="size-3" aria-label="Discord lié" />}
                                     {!etat && initial.has(m.id) && <span className="text-destructive">· sera retiré de la séance</span>}
                                     {pointes.has(m.id) && (

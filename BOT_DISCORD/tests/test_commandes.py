@@ -1,5 +1,6 @@
 """Chaque commande du bot exécutée hors Discord, avec une fausse API."""
 import discord
+import pytest
 
 from cogs.annonces import Annonces
 from cogs.compte import Compte, InscriptionModal
@@ -31,7 +32,8 @@ async def test_inscription_envoie_un_lien_prive():
     inter = FakeInteraction(FakeUser(id=42))
     modal = remplir(InscriptionModal(FakeBot(api)), prenom=" Jane ", nom="Doe", email="Jane@Ex.com ", classe="2B")
     await lancer(modal.on_submit(inter), inter)
-    assert api.appels_de("inscription") == [((42, "Jane", "Doe", "Jane@Ex.com", "2B"), {})]
+    # adresse perso : membre externe, la classe saisie est ignorée
+    assert api.appels_de("inscription") == [((42, "Jane", "Doe", "jane@ex.com", None, True), {})]
     msg = inter.dernier
     assert msg.ephemeral and "Bienvenue" in msg.texte and "48 h" in msg.texte
     assert msg.boutons[0].url == "https://arcanix.example/activer?jeton=abc"
@@ -526,3 +528,56 @@ def test_plus_de_commande_mypoint():
         return sorted(c.name for c in b.tree.get_commands())
     noms = asyncio.run(_run())
     assert noms == ["classement", "historique", "lier", "mod", "points", "profil", "register", "reinitialiser", "seances"]
+
+
+
+# --- Inscription interne / externe --------------------------------------------------------------------
+from cogs.compte import analyser_inscription  # noqa: E402
+
+
+@pytest.mark.parametrize("email,classe,attendu", [
+    ("j.dupont", "3A", ("j.dupont@myskolae.fr", "3A", False)),          # identifiant seul -> interne
+    (" J.Dupont@MySkolae.fr ", " 3A ", ("j.dupont@myskolae.fr", "3A", False)),
+    ("fan.tcg@gmail.com", "3A", ("fan.tcg@gmail.com", None, True)),      # adresse perso -> externe
+    ("fan.tcg@gmail.com", "", ("fan.tcg@gmail.com", None, True)),
+])
+def test_analyser_inscription(email, classe, attendu):
+    assert analyser_inscription(email, classe, "myskolae.fr") == attendu
+
+
+def test_analyser_inscription_interne_sans_classe():
+    with pytest.raises(ValueError, match="classe"):
+        analyser_inscription("j.dupont", "  ", "myskolae.fr")
+
+
+@run_async
+async def test_register_interne_identifiant_seul():
+    api = FakeApi(inscription={"url": "https://arcanix.example/activer?jeton=a", "expire_dans_heures": 48})
+    inter = FakeInteraction(FakeUser(id=5))
+    await lancer(remplir(InscriptionModal(FakeBot(api)), prenom="Jean", nom="Dupont", email="j.dupont",
+                         classe="3A-INFO").on_submit(inter), inter)
+    assert api.appels_de("inscription")[0][0] == (5, "Jean", "Dupont", "j.dupont@myskolae.fr", "3A-INFO", False)
+
+
+@run_async
+async def test_register_interne_sans_classe_refuse_sans_appel_api():
+    api = FakeApi()
+    inter = FakeInteraction()
+    await lancer(remplir(InscriptionModal(FakeBot(api)), prenom="Jean", nom="Dupont", email="j.dupont",
+                         classe="").on_submit(inter), inter)
+    assert "Indique ta classe" in inter.dernier.texte and not api.appels
+
+
+@run_async
+async def test_points_staff_hors_classement():
+    cog, inter = Membres(FakeBot(FakeApi(membre={**MODO, "rang": None, "hors_classement": True}))), FakeInteraction()
+    await lancer(cog.points.callback(cog, inter), inter)
+    assert "Hors classement" in inter.dernier.texte
+
+
+@run_async
+async def test_profil_externe():
+    m = {**MEMBRE, "classe": None, "externe": True}
+    cog, inter = Membres(FakeBot(FakeApi(membre=m))), FakeInteraction()
+    await lancer(cog.profil.callback(cog, inter, membre=None), inter)
+    assert "Externe" in inter.dernier.texte

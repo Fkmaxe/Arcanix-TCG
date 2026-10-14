@@ -10,7 +10,7 @@ import { isActive, navItems } from "./nav";
 import { ThemeToggle, UserMenu } from "./UserMenu";
 
 // Pages plein écran (sans barre de navigation basse)
-const BARE = ["/login", "/register", "/activer", "/mot-de-passe-oublie"];
+const BARE = ["/login", "/register", "/activer", "/mot-de-passe-oublie", "/desabonnement"];
 
 // Changer d'onglet ouvre toujours la page en haut
 const versLeHaut = () => window.scrollTo({ top: 0 });

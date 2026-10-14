@@ -47,7 +47,11 @@ def _gabarit(titre: str, paragraphes: list[str], bouton: tuple[str, str] | None,
 
 def _texte(titre: str, paragraphes: list[str], bouton: tuple[str, str] | None, note: str | None) -> str:
     import re
-    nettoie = lambda t: re.sub(r"<[^>]+>", "", t)  # noqa: E731
+    def nettoie(t: str) -> str:
+        # Les liens restent utilisables en texte brut : « libellé : URL »
+        t = re.sub(r'<a [^>]*href="([^"]+)"[^>]*>(.*?)</a>', lambda m: f"{m[2]} : {html.unescape(m[1])}", t)
+        t = re.sub(r"<br\s*/?>", "\n", t)
+        return html.unescape(re.sub(r"<[^>]+>", "", t))
     lignes = [titre, ""] + [nettoie(p) for p in paragraphes]
     if bouton:
         lignes += ["", f"{bouton[0]} : {bouton[1]}"]
@@ -69,7 +73,7 @@ def _message(destinataire: str, sujet: str, titre: str, paragraphes: list[str],
         msg["List-Unsubscribe"] = f"<{desabonnement}>"
         note = (note + "<br>" if note else "") + (
             f'Tu ne veux plus recevoir ces annonces ? <a href="{html.escape(desabonnement)}" '
-            f'style="color:#f5c24b">Se désabonner</a>.')
+            f'style="color:#f5c24b">Se désabonner</a>')
     msg.set_content(_texte(titre, paragraphes, bouton, note))
     msg.add_alternative(_gabarit(titre, paragraphes, bouton, note), subtype="html")
     return msg

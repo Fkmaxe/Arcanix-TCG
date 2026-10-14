@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import useSWR from "swr";
 import { useRouter } from "next/navigation";
-import { ClipboardCheck, Pencil, Plus, Search, Swords, Trash2 } from "lucide-react";
+import { ClipboardCheck, Clock, Pencil, Plus, Search, Swords, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ConfirmButton } from "@/components/common/ConfirmButton";
 import { DataTable, Pagination } from "@/components/common/DataTable";
@@ -14,11 +14,12 @@ import { JeuBadge } from "@/components/seances/JeuBadge";
 import SeanceForm from "@/components/seances/SeanceForm";
 import { SeanceCard } from "@/components/seances/SeanceCard";
 import { SemestreSelect } from "@/components/semestres/SemestreSelect";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { SeancesApi } from "@/lib/api";
-import { formatDate, formatHeure, formatPoints, semestreLabel } from "@/lib/format";
+import { etatPublication, formatDate, formatHeure, formatPoints, semestreLabel } from "@/lib/format";
 import { useDebounced } from "@/lib/hooks";
 import { errorMessage } from "@/lib/swr";
 import type { Seance } from "@/lib/types";
@@ -86,7 +87,14 @@ export default function GestionSeancesPage() {
                 )}
                 columns={[
                     { key: "date", header: "Date", render: (s) => <span className="tabular-nums">{formatDate(s.date_seance)} {formatHeure(s.heure_debut) && <span className="text-muted-foreground">· {formatHeure(s.heure_debut)}</span>}</span> },
-                    { key: "nom", header: "Séance", render: (s) => <div className="flex items-center gap-2"><span className="font-medium">{s.nom}</span><JeuBadge jeu={s.jeu} /></div> },
+                    { key: "nom", header: "Séance", render: (s) => (
+                        <div className="flex flex-wrap items-center gap-2">
+                            <span className="font-medium">{s.nom}</span><JeuBadge jeu={s.jeu} />
+                            {(etatPublication(s.discord_publier_le, s.annonce_envoyee).programme || etatPublication(s.email_publier_le, s.email_envoye).programme) && (
+                                <Badge variant="gold" title="Annonce programmée"><Clock /> Programmée</Badge>
+                            )}
+                        </div>
+                    ) },
                     { key: "points", header: "Points", render: (s) => <span className="text-gold font-semibold">{formatPoints(s.nb_point)}</span> },
                     { key: "presents", header: "Présents", render: (s) => `${s.nb_presents}/${s.nb_participants}` },
                     { key: "semestre", header: "Semestre", render: (s) => semestreLabel(s.semestre) },

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { PasswordInput } from "@/components/common/PasswordForm";
+import { SchoolEmailField, StatutChoix } from "@/components/common/SchoolEmailField";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useConfig } from "@/lib/useConfig";
 import { UsersApi } from "@/lib/api";
@@ -28,6 +29,7 @@ export default function UserForm({ user, onSuccess }: { user?: User; onSuccess: 
         role_utilisateur: (user?.role_utilisateur ?? "user") as Role,
         password: "",
     });
+    const [externe, setExterne] = useState(user?.externe ?? false);
     const [loading, setLoading] = useState(false);
     const { smtp } = useConfig();
     const [invitation, setInvitation] = useState(true);
@@ -38,7 +40,8 @@ export default function UserForm({ user, onSuccess }: { user?: User; onSuccess: 
         e.preventDefault();
         setLoading(true);
         try {
-            const { password, ...profil } = form;
+            const { password, ...champs } = form;
+            const profil = { ...champs, externe, classe: externe ? null : champs.classe.trim() };
             if (user) {
                 await UsersApi.update(user.id, admin ? profil : { ...profil, role_utilisateur: undefined });
                 if (password) await UsersApi.setPassword(user.id, password);
@@ -72,15 +75,22 @@ export default function UserForm({ user, onSuccess }: { user?: User; onSuccess: 
                     <Input id="u-nom" value={form.nom} onChange={set("nom")} required maxLength={100} autoComplete="off" />
                 </div>
             </div>
+            <StatutChoix externe={externe} onChange={setExterne} />
             <div className="space-y-1.5">
-                <Label htmlFor="u-mail">Email</Label>
-                <Input id="u-mail" type="email" value={form.adresse_mail} onChange={set("adresse_mail")} required autoComplete="off" />
+                <Label htmlFor="u-mail">{externe ? "Email" : "Adresse de l'école"}</Label>
+                {externe ? (
+                    <Input id="u-mail" type="email" value={form.adresse_mail} onChange={set("adresse_mail")} required autoComplete="off" />
+                ) : (
+                    <SchoolEmailField id="u-mail" value={form.adresse_mail} onChange={(v) => setForm((f) => ({ ...f, adresse_mail: v }))} required />
+                )}
             </div>
-            <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                    <Label htmlFor="u-classe">Classe</Label>
-                    <Input id="u-classe" value={form.classe} onChange={set("classe")} required maxLength={50} placeholder="3A-INFO" />
-                </div>
+            <div className={externe ? "space-y-1.5" : "grid grid-cols-2 gap-3"}>
+                {!externe && (
+                    <div className="space-y-1.5">
+                        <Label htmlFor="u-classe">Classe</Label>
+                        <Input id="u-classe" value={form.classe} onChange={set("classe")} required maxLength={50} placeholder="3A-INFO" />
+                    </div>
+                )}
                 <div className="space-y-1.5">
                     <Label htmlFor="u-role">Rôle</Label>
                     <Select

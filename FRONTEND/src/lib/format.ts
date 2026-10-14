@@ -78,3 +78,20 @@ export const formatDateHeure = (iso: string) =>
     new Date(iso).toLocaleString("fr-FR", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
 
 export const libellePlace = (p: number) => (p === 1 ? "1re" : `${p}e`);
+
+/** Classe d'un membre, ou « Externe » : seuls les membres extérieurs à l'école n'ont pas de classe. */
+export const classeOuExterne = (m: { classe?: string | null }) => m.classe || "Externe";
+
+/** Complète un identifiant de l'école (« j.dupont ») avec le domaine ; laisse une adresse complète intacte. */
+export const completerEmail = (saisie: string, domaine: string) => {
+    const v = saisie.trim();
+    return v && !v.includes("@") ? `${v}@${domaine}` : v;
+};
+
+/** État de publication d'un canal pour la modération : « Publiée le … », « Programmée le … » ou « Non publiée ». */
+export function etatPublication(le: string | null, envoye: boolean): { texte: string; programme: boolean } {
+    if (envoye && le) return { texte: `publiée le ${formatDateHeure(le)}`, programme: false };
+    if (!le) return { texte: "non publiée", programme: false };
+    if (new Date(le).getTime() > Date.now()) return { texte: `programmée le ${formatDateHeure(le)}`, programme: true };
+    return { texte: "publication en cours", programme: false };
+}

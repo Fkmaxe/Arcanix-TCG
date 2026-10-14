@@ -9,7 +9,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/lib/auth";
-import { initials, ROLE_LABELS } from "@/lib/format";
+import { initials, ROLE_LABELS, classeOuExterne } from "@/lib/format";
 
 export function ThemeToggle({ className }: { className?: string }) {
     const { resolvedTheme, setTheme } = useTheme();
@@ -46,7 +46,7 @@ export function UserMenu() {
                 <DropdownMenuLabel className="font-normal">
                     <div className="font-display font-semibold">{me.prenom} {me.nom}</div>
                     <div className="text-muted-foreground truncate text-xs">{me.adresse_mail}</div>
-                    <div className="text-gold mt-1 text-xs">{ROLE_LABELS[me.role_utilisateur]} · {me.classe}</div>
+                    <div className="text-gold mt-1 text-xs">{ROLE_LABELS[me.role_utilisateur]} · {classeOuExterne(me)}</div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>

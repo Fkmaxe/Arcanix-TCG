@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { UsersApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { initials, ROLE_LABELS } from "@/lib/format";
+import { initials, ROLE_LABELS, classeOuExterne } from "@/lib/format";
 import { useDebounced } from "@/lib/hooks";
 import { errorMessage } from "@/lib/swr";
 import type { User } from "@/lib/types";
@@ -150,7 +150,7 @@ export default function GestionMembresPage() {
                                 {u.prenom} {u.nom} {u.discord_id && <MessageCircle className="text-muted-foreground size-3.5" aria-label="Discord lié" />}
                             </p>
                             <p className="text-muted-foreground truncate text-xs">{u.adresse_mail}</p>
-                            <div className="mt-1 flex items-center gap-2 text-xs"><RoleBadge role={u.role_utilisateur} /><span className="text-muted-foreground">{u.classe}</span></div>
+                            <div className="mt-1 flex items-center gap-2 text-xs"><RoleBadge role={u.role_utilisateur} /><span className="text-muted-foreground">{classeOuExterne(u)}</span></div>
                         </div>
                         {actions(u)}
                     </div>
@@ -158,7 +158,7 @@ export default function GestionMembresPage() {
                 columns={[
                     { key: "nom", header: "Membre", render: (u) => <span className="font-medium">{u.prenom} {u.nom}</span> },
                     { key: "mail", header: "Email", render: (u) => <span className="text-muted-foreground">{u.adresse_mail}</span> },
-                    { key: "classe", header: "Classe", render: (u) => u.classe },
+                    { key: "classe", header: "Classe", render: (u) => classeOuExterne(u) },
                     { key: "role", header: "Rôle", render: (u) => <RoleBadge role={u.role_utilisateur} /> },
                     { key: "discord", header: "Discord", render: (u) => (u.discord_id ? <Badge variant="success">Lié</Badge> : <span className="text-muted-foreground">—</span>) },
                     { key: "actions", header: "", className: "text-right", render: actions },

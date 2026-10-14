@@ -8,7 +8,9 @@ export interface Me {
     email: string;
     adresse_mail: string;
     role_utilisateur: Role;
-    classe: string;
+    classe: string | null;
+    externe: boolean;
+    annonces_email: boolean;
     doit_changer_mdp: boolean;
     discord_lie: boolean;
 }
@@ -19,7 +21,9 @@ export interface User {
     prenom: string;
     adresse_mail: string;
     role_utilisateur: Role;
-    classe: string;
+    classe: string | null;
+    externe: boolean;
+    annonces_email: boolean;
     discord_id: string | null;
     doit_changer_mdp: boolean;
 }
@@ -49,7 +53,19 @@ export interface Seance {
     nb_attente: number;
     mon_inscription: "inscrit" | "attente" | null;
     a_resultats: boolean;
+    discord_publier_le: string | null;
+    annonce_envoyee: boolean;
+    email_publier_le: string | null;
+    email_envoye: boolean;
 }
+
+export type ModePublication = "immediat" | "programme" | "jamais";
+export type PublicationInput = {
+    discord_mode?: ModePublication;
+    discord_le?: string | null;
+    email_mode?: ModePublication;
+    email_le?: string | null;
+};
 
 export interface ParticipantDetail {
     utilisateur_id: number;
@@ -58,7 +74,7 @@ export interface ParticipantDetail {
     commentaire: string | null;
     nom: string;
     prenom: string;
-    classe: string;
+    classe: string | null;
     adresse_mail: string | null;
     discord_lie: boolean;
 }
@@ -67,7 +83,7 @@ export interface MembreResume {
     utilisateur_id: number;
     prenom: string;
     nom: string;
-    classe: string;
+    classe: string | null;
     discord_lie: boolean;
 }
 
@@ -156,6 +172,7 @@ export interface EntreeJournal {
 export interface ConfigPublique {
     smtp: boolean;
     qr_periode_s: number;
+    domaine_ecole: string;
 }
 
 export type SeanceInput = {
@@ -168,7 +185,7 @@ export type SeanceInput = {
     nb_point: number;
     semestre_id: number;
     places_max: number | null;
-};
+} & PublicationInput;
 
 export interface MaParticipation {
     seance_id: number;
@@ -191,6 +208,7 @@ export interface MesStats {
     semestre: Semestre | null;
     points: number;
     rang: number | null;
+    hors_classement: boolean;
     nb_membres_classes: number;
     seances_semestre: number;
     presences: number;
@@ -203,7 +221,7 @@ export interface LigneClassement {
     userId: number;
     prenom: string;
     nom: string;
-    classe: string;
+    classe: string | null;
     points: number;
     presences: number;
     bonus: number;
@@ -216,11 +234,13 @@ export interface Classement {
 }
 
 export interface StatPoints {
-    rang: number;
+    rang: number | null;
     userId: number;
     nom: string;
     prenom: string;
-    classe: string;
+    classe: string | null;
+    externe: boolean;
+    role: Role;
     points: number;
     presences: number;
     bonus: number;

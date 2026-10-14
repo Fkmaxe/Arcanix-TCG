@@ -8,7 +8,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { SeancesApi } from "@/lib/api";
 import { isStaff, useAuth } from "@/lib/auth";
-import { todayIso } from "@/lib/format";
+import { todayIso, classeOuExterne } from "@/lib/format";
 import { errorMessage } from "@/lib/swr";
 import type { SeanceDetail } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -83,7 +83,7 @@ export function InscriptionBloc({ seance, onChange }: { seance: SeanceDetail; on
                     <ul className="mt-2 divide-y rounded-lg border">
                         {seance.inscrits.map((i) => (
                             <li key={i.utilisateur_id} className="flex items-center gap-2 px-3 py-2 text-sm">
-                                <span className="min-w-0 flex-1 truncate">{i.prenom} {i.nom} <span className="text-muted-foreground text-xs">· {i.classe}</span></span>
+                                <span className="min-w-0 flex-1 truncate">{i.prenom} {i.nom} <span className="text-muted-foreground text-xs">· {classeOuExterne(i)}</span></span>
                                 {i.statut === "attente" && <span className="text-gold text-xs">attente</span>}
                                 <Button
                                     size="icon-sm"

@@ -193,6 +193,9 @@ def test_planificateur_envoie_une_seule_fois_aux_abonnes(client, make_user, smtp
     assert "Draft" in msg["Subject"] and "desabonnement?u=" in msg["List-Unsubscribe"]
     corps = msg.get_body(("html",)).get_content()
     assert "12 places restantes sur 12" in corps and f"/seances/{maintenant['id']}" in corps
+    # la version texte garde les liens (désinscription comprise)
+    texte = msg.get_body(("plain",)).get_content()
+    assert "Se désabonner : https://arcanix.test/desabonnement?u=" in texte and "Je viens : https://" in texte
 
     # l'email programmé part quand son heure arrive
     with engine.begin() as c:

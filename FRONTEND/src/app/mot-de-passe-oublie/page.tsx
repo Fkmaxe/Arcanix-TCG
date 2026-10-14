@@ -8,11 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { AuthApi } from "@/lib/api";
+import { completerEmail } from "@/lib/format";
 import { errorMessage } from "@/lib/swr";
 import { useConfig } from "@/lib/useConfig";
 
 export default function MotDePasseOubliePage() {
-    const { smtp, charge } = useConfig();
+    const { smtp, charge, domaine } = useConfig();
     const [email, setEmail] = useState("");
     const [loading, setLoading] = useState(false);
     const [envoye, setEnvoye] = useState(false);
@@ -23,7 +24,9 @@ export default function MotDePasseOubliePage() {
         setErr(null);
         setLoading(true);
         try {
-            await AuthApi.motDePasseOublie(email.trim());
+            const adresse = completerEmail(email, domaine);
+            setEmail(adresse);
+            await AuthApi.motDePasseOublie(adresse);
             setEnvoye(true);
         } catch (e) {
             setErr(errorMessage(e));
@@ -55,7 +58,7 @@ export default function MotDePasseOubliePage() {
                         <p className="text-muted-foreground text-center text-sm">Indique ton email : tu recevras un lien pour choisir un nouveau mot de passe.</p>
                         <div className="space-y-1.5">
                             <Label htmlFor="email">Email</Label>
-                            <Input id="email" type="email" inputMode="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" autoFocus />
+                            <Input id="email" type="text" inputMode="email" autoCapitalize="none" spellCheck={false} value={email} onChange={(e) => setEmail(e.target.value)} required autoComplete="email" autoFocus placeholder="j.dupont ou ton email" />
                         </div>
                         {err && <p className="text-destructive text-sm" role="alert">{err}</p>}
                         <Button type="submit" className="w-full" disabled={loading}>

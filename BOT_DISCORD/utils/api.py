@@ -65,9 +65,11 @@ class ApiClient:
             raise ApiError(0, "Le site Arcanix est injoignable pour le moment, réessaie plus tard.") from e
 
     # --- Compte -----------------------------------------------------------------
-    async def inscription(self, discord_id: int, prenom: str, nom: str, email: str, classe: str) -> dict:
+    async def inscription(self, discord_id: int, prenom: str, nom: str, email: str, classe: str | None,
+                          externe: bool = False) -> dict:
         return await self.request("POST", "/discord/inscription", json={
             "discord_id": str(discord_id), "prenom": prenom, "nom": nom, "adresse_mail": email, "classe": classe,
+            "externe": externe,
         })
 
     async def lier(self, discord_id: int, code: str) -> dict:

@@ -44,7 +44,8 @@ export default function Dashboard() {
                         <div className="text-center">
                             <p className="text-muted-foreground text-xs uppercase">Rang</p>
                             <p className="font-display text-3xl font-bold">
-                                {stats?.rang ? <>#{stats.rang}<span className="text-muted-foreground text-base font-normal">/{stats.nb_membres_classes}</span></> : "—"}
+                                {stats?.hors_classement ? <span className="text-muted-foreground text-sm font-normal">Hors classement</span>
+                                    : stats?.rang ? <>#{stats.rang}<span className="text-muted-foreground text-base font-normal">/{stats.nb_membres_classes}</span></> : "—"}
                             </p>
                         </div>
                         <Button asChild variant="outline">

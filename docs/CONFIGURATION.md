@@ -64,6 +64,7 @@ Génère une valeur **différente** pour chaque variable secrète.
 | `CORS_ORIGINS` | **oui en prod** | `https://arcanix.fr` | API |
 | `FRONTEND_URL` | **oui en prod** | `https://arcanix.fr` | API, bot |
 | `DEBUG` | non (défaut `false`) | `false` | API |
+| `EMAIL_DOMAINE_ECOLE` | non (défaut `myskolae.fr`) | `myskolae.fr` | API, bot, site |
 | `FORWARDED_ALLOW_IPS` | **oui derrière Nginx** | `192.168.1.10` (IP de la VM Nginx) | API |
 | `NEXT_PUBLIC_API_BASE` | **oui en prod** | `https://api.arcanix.fr` | site (au build) |
 | `NEXT_PUBLIC_SITE_URL` | **oui en prod** | `https://arcanix.fr` | site (au build) |
@@ -147,6 +148,15 @@ Indications :
 - Elle doit être **accessible depuis Internet**, sinon les membres ne pourront pas ouvrir les liens ni scanner le QR depuis leur téléphone.
 - Discord n'affiche le logo que si l'adresse est en `https://`.
 
+### `EMAIL_DOMAINE_ECOLE`
+Domaine des adresses de l'école. Il distingue les deux types de membres :
+- **élève (interne)** : adresse `…@<domaine>` et classe obligatoire. À l'inscription, on ne tape que
+  l'identifiant (`j.dupont`), le suffixe est affiché et ajouté automatiquement ;
+- **externe** : n'importe quelle adresse, pas de classe.
+- **Valeur** : `myskolae.fr` (défaut), sans `@`. Le site le lit via l'API et le bot via sa propre copie :
+  il est transmis aux deux par `docker-compose.yml`.
+- Au passage à cette version, les comptes existants dont l'adresse n'est pas de ce domaine sont marqués externes.
+
 ### `DEBUG`
 - **En production : `false`, toujours.**
 - `true` sert uniquement en développement : l'API accepte un `JWT_SECRET` vide (secret temporaire) et affiche des journaux plus bavards.
@@ -204,6 +214,10 @@ Adresse publique du site, utilisée pour l'aperçu des liens partagés (image et
 ## 6. Emails (SMTP)
 
 Les emails servent à :
+- **annoncer les séances** : envoyés à l'heure choisie dans le formulaire de séance, à tous les membres
+  abonnés. Un planificateur intégré à l'API vérifie toutes les `PLANIFICATEUR_INTERVALLE_S` secondes
+  (60 par défaut). Chaque email contient un lien de désinscription en un clic, et chacun peut se réabonner
+  dans son profil (section Notifications) ;
 - **mot de passe oublié** sur le site ;
 - **invitation** quand la modération crée un compte ;
 - **envoi du lien de mot de passe** depuis la fiche d'un membre ;
@@ -377,6 +391,7 @@ Facultatifs : les valeurs par défaut conviennent dans la plupart des cas. Ajout
 | `POINTAGE_DUREE_H` | `4` | Durée (en heures) pendant laquelle un pointage QR reste ouvert, s'il n'est pas fermé à la main |
 | `ANNONCES_INTERVALLE_MIN` | `5` | Fréquence (en minutes) à laquelle le bot vérifie s'il y a des annonces à publier |
 | `ROLES_INTERVALLE_MIN` | `15` | Fréquence (en minutes) de synchronisation des rôles Discord |
+| `PLANIFICATEUR_INTERVALLE_S` | `60` | Fréquence (en secondes) à laquelle l'API vérifie les emails d'annonce de séance à envoyer |
 
 ---
 

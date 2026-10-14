@@ -8,11 +8,13 @@ import { EmptyState, ErrorBox, Skeleton } from "@/components/common/States";
 import { SemestreSelect } from "@/components/semestres/SemestreSelect";
 import { Podium } from "@/components/stats/Podium";
 import { StatsApi } from "@/lib/api";
-import { formatPoints, semestreLabel } from "@/lib/format";
+import { isStaff, useAuth } from "@/lib/auth";
+import { formatPoints, semestreLabel, classeOuExterne } from "@/lib/format";
 import { errorMessage } from "@/lib/swr";
 import { cn } from "@/lib/utils";
 
 export default function ClassementPage() {
+    const { me } = useAuth();
     const [semestreId, setSemestreId] = useState<number | undefined>();
     const { data, error, isLoading, mutate } = useSWR(["/stats/classement", semestreId], () => StatsApi.classement(semestreId));
     const lignes = data?.lignes ?? [];
@@ -38,6 +40,11 @@ export default function ClassementPage() {
                         <Podium lignes={lignes} />
                     </div>
 
+                    {isStaff(me) && (
+                        <p className="bg-muted/60 text-muted-foreground rounded-xl p-3 text-center text-sm">
+                            Modération et admins n&apos;apparaissent pas dans le classement : il est réservé aux membres.
+                        </p>
+                    )}
                     {moi && moi.rang > 3 && (
                         <a href={`#ligne-${moi.userId}`} className="border-ember/40 bg-ember/10 block rounded-xl border p-3 text-center text-sm">
                             Tu es <strong className="text-ember">#{moi.rang}</strong> avec <strong>{formatPoints(moi.points)} pts</strong> — voir ma position
@@ -64,7 +71,7 @@ export default function ClassementPage() {
                                         {l.prenom} {l.nom} {l.moi && <span className="text-ember text-xs">(toi)</span>}
                                     </p>
                                     <p className="text-muted-foreground text-xs">
-                                        {l.classe} · {l.presences} présence{l.presences > 1 ? "s" : ""}
+                                        {classeOuExterne(l)} · {l.presences} présence{l.presences > 1 ? "s" : ""}
                                         {l.bonus !== 0 && <span className={l.bonus > 0 ? "text-success" : "text-destructive"}> · {l.bonus > 0 ? "+" : ""}{formatPoints(l.bonus)} bonus</span>}
                                     </p>
                                 </div>

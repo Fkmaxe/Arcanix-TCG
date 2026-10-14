@@ -24,7 +24,13 @@ docker compose up -d --build --remove-orphans   # --remove-orphans arrête les c
 
 ## Fonctionnalités
 
+- **Membres internes ou externes** : un élève s'inscrit avec son identifiant de l'école (`j.dupont`, le
+  suffixe `@myskolae.fr` est ajouté) et sa classe ; un externe avec n'importe quelle adresse, sans classe.
+  À la connexion, l'identifiant seul suffit aussi.
 - **Séances** : liste et calendrier, filtres par jeu, détail, places limitées.
+- **Publication programmée** : pour chaque séance, l'annonce Discord et l'email aux membres partent
+  « dès la création », à une date et heure choisies, ou jamais. Les emails sont envoyés par un planificateur
+  intégré à l'API (une seule fois par séance) ; chaque membre peut s'en désabonner (profil ou lien dans l'email).
 - **« Je viens »** : inscription sur le site ou par bouton sous l'annonce Discord ; liste d'attente avec
   promotion automatique (email + message privé Discord) quand une place se libère.
 - **Pointage par QR code** : la modération affiche un QR (page *Pointage QR* d'une séance, plein écran possible) qui
@@ -36,7 +42,9 @@ docker compose up -d --build --remove-orphans   # --remove-orphans arrête les c
   recalculés à chaque correction ; annonce automatique sur Discord.
 - **Journal** : chaque présence, point, rôle, séance… avec son auteur et l'heure (*Gestion → Journal*, ou
   *Historique* depuis la fiche d'un membre).
-- **Classement**, profil (graphique, historique), exports CSV/JSON (avec la colonne bonus/malus).
+- **Classement** réservé aux membres : modérateurs et admins n'y figurent pas (ni podium, ni rôle Top 3) ;
+  les exports CSV/JSON les listent sans rang, avec leur rôle et la colonne bonus/malus.
+- Profil (graphique, historique, notifications).
 
 ## Emails (SMTP)
 
@@ -103,7 +111,7 @@ de l'ancienne version serait aussi reconnue et migrée sans perte (voir `0002_re
 
 | Commande | Effet |
 |---|---|
-| `/register` | Formulaire d'inscription → lien privé pour choisir son mot de passe |
+| `/register` | Formulaire d'inscription → lien privé pour choisir son mot de passe. Email : identifiant de l'école (`j.dupont`) = élève, classe obligatoire ; adresse perso = externe, sans classe |
 | `/lier code` | Lie un compte créé sur le site (code généré sur la page Profil) |
 | `/reinitialiser` | Nouveau lien de mot de passe |
 | `/points` | Points, rang et présences du semestre en cours |

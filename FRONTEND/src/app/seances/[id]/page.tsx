@@ -4,7 +4,7 @@ import Link from "next/link";
 import { use, useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
-import { ArrowLeft, CalendarDays, CheckCircle2, Clock, Flame, Hourglass, MapPin, Pencil, QrCode, Trash2, Users, XCircle } from "lucide-react";
+import { ArrowLeft, CalendarDays, CheckCircle2, Clock, Flame, Hourglass, Mail, MapPin, MessageCircle, Pencil, QrCode, Trash2, Users, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { OrnateCard } from "@/components/brand/OrnateCard";
 import { ConfirmButton } from "@/components/common/ConfirmButton";
@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { SeancesApi } from "@/lib/api";
 import { isStaff, useAuth } from "@/lib/auth";
-import { formatDate, formatHeure, formatPoints, relativeDay, semestreLabel, todayIso } from "@/lib/format";
+import { etatPublication, formatDate, formatHeure, formatPoints, relativeDay, semestreLabel, todayIso } from "@/lib/format";
 import { errorMessage } from "@/lib/swr";
 
 export default function SeanceDetailPage({ params }: { params: Promise<{ id: string }> }) {
@@ -91,7 +91,14 @@ export default function SeanceDetailPage({ params }: { params: Promise<{ id: str
                 )}
 
                 {staff && (
-                    <div className="mt-5 flex flex-wrap gap-2 border-t pt-4">
+                    <div className="text-muted-foreground mt-5 space-y-1 border-t pt-4 text-sm">
+                        <p className="flex items-center gap-2"><MessageCircle className="text-gold size-4" /> Discord : {etatPublication(seance.discord_publier_le, seance.annonce_envoyee).texte}</p>
+                        <p className="flex items-center gap-2"><Mail className="text-gold size-4" /> Email : {etatPublication(seance.email_publier_le, seance.email_envoye).texte}</p>
+                    </div>
+                )}
+
+                {staff && (
+                    <div className="mt-4 flex flex-wrap gap-2">
                         <Button asChild size="sm">
                             <Link href={`/seances/${seance.id}/qr`}><QrCode /> Pointage QR{seance.pointage_ouvert ? " (ouvert)" : ""}</Link>
                         </Button>

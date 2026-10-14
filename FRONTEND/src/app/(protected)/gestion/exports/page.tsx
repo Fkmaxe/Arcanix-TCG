@@ -10,7 +10,7 @@ import { ErrorBox, StatTile } from "@/components/common/States";
 import { SemestreSelect, useSemestres } from "@/components/semestres/SemestreSelect";
 import { Button } from "@/components/ui/button";
 import { StatsApi } from "@/lib/api";
-import { formatPoints } from "@/lib/format";
+import { formatPoints, classeOuExterne, ROLE_LABELS } from "@/lib/format";
 import { errorMessage } from "@/lib/swr";
 
 export default function ExportsPage() {
@@ -21,10 +21,12 @@ export default function ExportsPage() {
     const [busy, setBusy] = useState<string | null>(null);
 
     const stats = useMemo(() => {
-        const actifs = data.filter((p) => p.presences > 0);
+        // Statistiques sur les membres classés (modération et admins exclus)
+        const membres = data.filter((p) => p.role === "user");
+        const actifs = membres.filter((p) => p.presences > 0);
         const pts = actifs.map((p) => p.points);
         return {
-            membres: data.length,
+            membres: membres.length,
             actifs: actifs.length,
             moyenne: pts.length ? pts.reduce((a, b) => a + b, 0) / pts.length : 0,
             max: pts.length ? Math.max(...pts) : 0,
@@ -79,18 +81,19 @@ export default function ExportsPage() {
                     empty="Aucun membre"
                     mobileCard={(r) => (
                         <div className="bg-card flex items-center gap-3 rounded-xl border p-3">
-                            <span className="font-display text-muted-foreground w-7 text-center font-bold">{r.rang}</span>
+                            <span className="font-display text-muted-foreground w-7 text-center font-bold">{r.rang ?? "—"}</span>
                             <div className="min-w-0 flex-1">
                                 <p className="truncate text-sm font-medium">{r.prenom} {r.nom}</p>
-                                <p className="text-muted-foreground text-xs">{r.classe} · {r.presences} présence(s)</p>
+                                <p className="text-muted-foreground text-xs">{classeOuExterne(r)} · {r.presences} présence(s)</p>
                             </div>
                             <span className="text-gold font-display font-bold">{formatPoints(r.points)}</span>
                         </div>
                     )}
                     columns={[
-                        { key: "rang", header: "Rang", render: (r) => <span className="font-display font-bold">#{r.rang}</span> },
+                        { key: "rang", header: "Rang", render: (r) => (r.rang ? <span className="font-display font-bold">#{r.rang}</span> : <span className="text-muted-foreground" title="Modération : hors classement">—</span>) },
+                        { key: "role", header: "Rôle", render: (r) => ROLE_LABELS[r.role] },
                         { key: "nom", header: "Nom", render: (r) => `${r.nom} ${r.prenom}` },
-                        { key: "classe", header: "Classe", render: (r) => r.classe },
+                        { key: "classe", header: "Classe", render: (r) => classeOuExterne(r) },
                         { key: "presences", header: "Présences", render: (r) => r.presences },
                         { key: "bonus", header: "Bonus/malus", render: (r) => (r.bonus ? <span className={r.bonus > 0 ? "text-success" : "text-destructive"}>{r.bonus > 0 ? "+" : ""}{formatPoints(r.bonus)}</span> : "—") },
                         { key: "points", header: "Points", render: (r) => <span className="text-gold font-semibold">{formatPoints(r.points)}</span> },

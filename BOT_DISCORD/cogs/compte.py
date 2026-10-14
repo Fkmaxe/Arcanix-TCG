@@ -3,6 +3,7 @@ import discord
 from discord import app_commands
 from discord.ext import commands
 
+import config
 from utils import embeds
 from utils.interactions import Formulaire, repondre
 from utils.roles import donner_role_membre
@@ -17,21 +18,42 @@ def message_lien(titre: str, texte: str, label: str, url: str) -> tuple[discord.
     return e, view
 
 
+def analyser_inscription(email: str, classe: str, domaine: str) -> tuple[str, str | None, bool]:
+    """Interne ou externe d'après l'adresse saisie : (email complet, classe, externe).
+
+    « j.dupont » (sans @) ou une adresse de l'école : élève interne, classe obligatoire.
+    Toute autre adresse : membre externe, la classe est ignorée.
+    """
+    email, classe = email.strip().lower(), classe.strip()
+    if "@" not in email:
+        email = f"{email}@{domaine}"
+    if email.endswith(f"@{domaine}"):
+        if not classe:
+            raise ValueError("Indique ta classe (élèves de l'école). Si tu n'es pas élève, mets ton adresse email perso.")
+        return email, classe, False
+    return email, None, True
+
+
 class InscriptionModal(Formulaire, title="Rejoindre Arcanix"):
     prenom = discord.ui.TextInput(label="Prénom", max_length=100)
     nom = discord.ui.TextInput(label="Nom", max_length=100)
-    email = discord.ui.TextInput(label="Adresse email", placeholder="prenom.nom@exemple.fr", max_length=255)
-    classe = discord.ui.TextInput(label="Classe", placeholder="ex. 3A-INFO", max_length=50)
+    email = discord.ui.TextInput(label="Email de l'école (ex. j.dupont) ou perso", placeholder="j.dupont",
+                                 max_length=255)
+    classe = discord.ui.TextInput(label="Classe (élèves de l'école uniquement)", placeholder="ex. 3A-INFO",
+                                  max_length=50, required=False)
 
     def __init__(self, bot):
         super().__init__()
         self.bot = bot
 
     async def on_submit(self, interaction: discord.Interaction):
+        try:
+            email, classe, externe = analyser_inscription(str(self.email), str(self.classe), config.EMAIL_DOMAINE_ECOLE)
+        except ValueError as e:
+            return await repondre(interaction, embed=embeds.erreur(str(e)))
         await interaction.response.defer(ephemeral=True, thinking=True)
         prenom = str(self.prenom).strip()
-        r = await self.bot.api.inscription(interaction.user.id, prenom, str(self.nom).strip(),
-                                           str(self.email).strip(), str(self.classe).strip())
+        r = await self.bot.api.inscription(interaction.user.id, prenom, str(self.nom).strip(), email, classe, externe)
         e, view = message_lien(
             f"Bienvenue dans la guilde, {prenom} ! 🔥",
             "Ton compte Arcanix est créé et lié à ton Discord.\n"

@@ -25,14 +25,16 @@ export const AuthApi = {
     me: () => fetcher<Me>("/auth/me"),
     definirMotDePasse: (jeton: string, mot_de_passe: string) =>
         fetcher<{ access_token: string }>("/auth/definir-mot-de-passe", json("POST", { jeton, mot_de_passe })),
-    register: (body: { nom: string; prenom: string; adresse_mail: string; classe: string; password: string }) =>
+    register: (body: { nom: string; prenom: string; adresse_mail: string; classe: string | null; externe: boolean; password: string }) =>
         fetcher<User>("/users", json("POST", body)),
+    desabonner: (u: string, s: string) =>
+        fetcher<{ message: string }>(`/auth/desabonner${qs({ u, s })}`, json("POST")),
     motDePasseOublie: (email: string) => fetcher<{ message: string }>("/auth/mot-de-passe-oublie", json("POST", { email })),
     config: () => fetcher<ConfigPublique>("/config"),
 };
 
 export const MeApi = {
-    update: (body: Partial<Pick<Me, "nom" | "prenom" | "classe">>) => fetcher<Me>("/me", json("PATCH", body)),
+    update: (body: Partial<Pick<Me, "nom" | "prenom" | "classe" | "annonces_email">>) => fetcher<Me>("/me", json("PATCH", body)),
     changePassword: (new_password: string, current_password?: string) =>
         fetcher<null>("/me/password", json("PATCH", { new_password, current_password })),
     participations: (semestreId?: number) => fetcher<MaParticipation[]>(`/me/participations${qs({ semestreId })}`),
@@ -48,9 +50,9 @@ export const UsersApi = {
     list: (params: UsersQuery = {}) => fetchPage<User>(`/users${qs(params)}`),
     get: (id: number) => fetcher<User>(`/users/${id}`),
     classes: () => fetcher<string[]>("/users/classes"),
-    create: (body: Omit<User, "id" | "discord_id" | "doit_changer_mdp"> & { password?: string; envoyer_invitation?: boolean }) =>
+    create: (body: Omit<User, "id" | "discord_id" | "doit_changer_mdp" | "annonces_email"> & { password?: string; envoyer_invitation?: boolean }) =>
         fetcher<User>("/users", json("POST", body)),
-    update: (id: number, body: Partial<Omit<User, "id" | "discord_id" | "doit_changer_mdp">>) =>
+    update: (id: number, body: Partial<Omit<User, "id" | "discord_id" | "doit_changer_mdp" | "annonces_email">>) =>
         fetcher<User>(`/users/${id}`, json("PATCH", body)),
     remove: (id: number) => fetcher<null>(`/users/${id}`, json("DELETE")),
     setPassword: (id: number, new_password: string) =>

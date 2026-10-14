@@ -71,6 +71,17 @@ def succes(message: str) -> discord.Embed:
     return discord.Embed(description=f"✅ {message}", color=SUCCES)
 
 
+def classe(m: dict) -> str:
+    return m.get("classe") or ("Externe" if m.get("externe") else "—")
+
+
+def texte_rang(m: dict) -> str:
+    """Rang d'un membre ; la modération n'est pas classée."""
+    if m.get("hors_classement"):
+        return "Hors classement (modération)"
+    return f"#{m['rang']}" if m.get("rang") else "Non classé"
+
+
 def rang(r: int) -> str:
     return MEDAILLES.get(r, f"`#{r:>2}`")
 

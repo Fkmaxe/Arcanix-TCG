@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import useSWR from "swr";
-import { Check, Copy, KeyRound, Link2, Loader2, MessageCircle, ScrollText, Unlink, UserRound } from "lucide-react";
+import { Check, Copy, KeyRound, Link2, Loader2, Mail, MessageCircle, ScrollText, Unlink, UserRound } from "lucide-react";
 import { toast } from "sonner";
 import { OrnateCard } from "@/components/brand/OrnateCard";
 import { ConfirmButton } from "@/components/common/ConfirmButton";
@@ -14,13 +14,15 @@ import { JeuBadge } from "@/components/seances/JeuBadge";
 import { SemestreSelect } from "@/components/semestres/SemestreSelect";
 import { PointsChart } from "@/components/stats/PointsChart";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { MeApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import { CATEGORIES, formatDate, formatPoints, formatSigne, ROLE_LABELS, semestreLabel } from "@/lib/format";
+import { CATEGORIES, formatDate, formatPoints, formatSigne, ROLE_LABELS, semestreLabel, classeOuExterne } from "@/lib/format";
 import { errorMessage } from "@/lib/swr";
+import { useConfig } from "@/lib/useConfig";
 
 function InfosForm() {
     const { me, refresh } = useAuth();
@@ -33,7 +35,7 @@ function InfosForm() {
         e.preventDefault();
         setLoading(true);
         try {
-            await MeApi.update(form);
+            await MeApi.update(me?.externe ? { prenom: form.prenom, nom: form.nom } : form);
             await refresh();
             toast.success("Profil mis à jour");
         } catch (err) {
@@ -55,10 +57,16 @@ function InfosForm() {
                     <Input id="p-nom" value={form.nom} onChange={set("nom")} required maxLength={100} />
                 </div>
             </div>
-            <div className="space-y-1.5">
-                <Label htmlFor="p-classe">Classe</Label>
-                <Input id="p-classe" value={form.classe} onChange={set("classe")} required maxLength={50} />
-            </div>
+            {me?.externe ? (
+                <p className="bg-muted/60 text-muted-foreground rounded-lg p-3 text-sm">
+                    Tu es <strong className="text-foreground">membre externe</strong> (hors école) : pas de classe à renseigner.
+                </p>
+            ) : (
+                <div className="space-y-1.5">
+                    <Label htmlFor="p-classe">Classe</Label>
+                    <Input id="p-classe" value={form.classe} onChange={set("classe")} required maxLength={50} />
+                </div>
+            )}
             <div className="space-y-1.5">
                 <Label htmlFor="p-mail">Email</Label>
                 <Input id="p-mail" value={me?.adresse_mail ?? ""} disabled />
@@ -68,6 +76,36 @@ function InfosForm() {
                 {loading && <Loader2 className="animate-spin" />} Enregistrer
             </Button>
         </form>
+    );
+}
+
+function Notifications() {
+    const { me, refresh } = useAuth();
+    const { smtp } = useConfig();
+    const [loading, setLoading] = useState(false);
+    const basculer = async (actif: boolean) => {
+        setLoading(true);
+        try {
+            await MeApi.update({ annonces_email: actif });
+            await refresh();
+            toast.success(actif ? "Tu recevras les annonces par email" : "Tu ne recevras plus les annonces par email");
+        } catch (err) {
+            toast.error(errorMessage(err));
+        } finally {
+            setLoading(false);
+        }
+    };
+    return (
+        <div className="space-y-3">
+            <label className="flex items-start gap-3 text-sm">
+                <Checkbox checked={me?.annonces_email ?? true} disabled={loading} onCheckedChange={(v) => basculer(!!v)} className="mt-0.5" />
+                <span>
+                    <span className="font-medium">Recevoir les annonces de séances par email</span>
+                    <span className="text-muted-foreground block text-xs">À {me?.adresse_mail}, quand la modération publie une séance.</span>
+                </span>
+            </label>
+            {!smtp && <p className="text-muted-foreground text-xs">L&apos;envoi d&apos;emails n&apos;est pas encore activé par l&apos;association.</p>}
+        </div>
     );
 }
 
@@ -163,7 +201,7 @@ export default function ProfilPage() {
     return (
         <div className="space-y-8">
             <PageHeader
-                eyebrow={me ? `${ROLE_LABELS[me.role_utilisateur]} · ${me.classe}` : undefined}
+                eyebrow={me ? `${ROLE_LABELS[me.role_utilisateur]} · ${classeOuExterne(me)}` : undefined}
                 title={me ? `${me.prenom} ${me.nom}` : "Profil"}
                 description="Tes informations, ta progression et ton grimoire de séances."
             />
@@ -251,7 +289,7 @@ export default function ProfilPage() {
                 )}
             </section>
 
-            <div className="grid gap-4 lg:grid-cols-3">
+            <div className="grid gap-4 md:grid-cols-2">
                 <Card>
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2"><UserRound className="text-gold size-5" /> Mes informations</CardTitle>
@@ -263,6 +301,13 @@ export default function ProfilPage() {
                         <CardTitle className="flex items-center gap-2"><KeyRound className="text-gold size-5" /> Mot de passe</CardTitle>
                     </CardHeader>
                     <CardContent><PasswordForm /></CardContent>
+                </Card>
+                <Card id="notifications" className="scroll-mt-24">
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2"><Mail className="text-gold size-5" /> Notifications</CardTitle>
+                        <CardDescription>Choisis comment tu es prévenu·e des nouvelles séances.</CardDescription>
+                    </CardHeader>
+                    <CardContent><Notifications /></CardContent>
                 </Card>
                 <Card id="discord" className="scroll-mt-24">
                     <CardHeader>

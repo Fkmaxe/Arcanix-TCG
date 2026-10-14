@@ -38,7 +38,7 @@ class Membres(commands.Cog):
         await interaction.response.defer(ephemeral=True, thinking=True)
         m = await self.bot.api.membre(interaction.user.id)
         e = embeds.embed(f"🔥 {embeds.pts(m['points'])} points", f"Semestre **{embeds.semestre(m['semestre'])}**")
-        e.add_field(name="🏆 Rang", value=f"#{m['rang']}" if m["rang"] else "Non classé", inline=True)
+        e.add_field(name="🏆 Rang", value=embeds.texte_rang(m), inline=True)
         e.add_field(name="📅 Présences", value=str(m["presences"]), inline=True)
         e.add_field(name="✨ Total cumulé", value=f"{embeds.pts(m['total_points'])} pts", inline=True)
         await repondre(interaction, embed=e)
@@ -55,10 +55,10 @@ class Membres(commands.Cog):
                 return await repondre(interaction, embed=embeds.erreur(f"{cible.display_name} n'a pas lié son compte Arcanix."))
             raise
         role = "🛡️ Modération" if m["role_utilisateur"] != "user" else "Membre"
-        e = embeds.embed(f"{m['prenom']} {m['nom'][:1]}.", f"{m['classe']} · {role}", thumbnail=False)
+        e = embeds.embed(f"{m['prenom']} {m['nom'][:1]}.", f"{embeds.classe(m)} · {role}", thumbnail=False)
         e.set_thumbnail(url=cible.display_avatar.url)
         e.add_field(name=f"Semestre {embeds.semestre(m['semestre'])}",
-                    value=f"**{embeds.pts(m['points'])} pts** · rang #{m['rang'] or '—'}", inline=False)
+                    value=f"**{embeds.pts(m['points'])} pts** · {embeds.texte_rang(m)}", inline=False)
         e.add_field(name="Présences", value=str(m["presences"]), inline=True)
         e.add_field(name="Total cumulé", value=f"{embeds.pts(m['total_points'])} pts", inline=True)
         await repondre(interaction, embed=e)

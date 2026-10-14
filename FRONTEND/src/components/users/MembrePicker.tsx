@@ -5,7 +5,7 @@ import useSWR from "swr";
 import { Search, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { UsersApi } from "@/lib/api";
-import { initials } from "@/lib/format";
+import { initials, classeOuExterne } from "@/lib/format";
 import { useDebounced } from "@/lib/hooks";
 import type { User } from "@/lib/types";
 
@@ -21,7 +21,7 @@ export function MembrePicker({ value, onChange, id }: { value: MembreChoisi | nu
         return (
             <div className="bg-surface/60 flex h-11 items-center gap-2 rounded-md border px-2 sm:h-10">
                 <span className="bg-muted text-gold grid size-7 place-items-center rounded-full text-xs font-bold">{initials(value.prenom, value.nom)}</span>
-                <span className="min-w-0 flex-1 truncate text-sm">{value.prenom} {value.nom} <span className="text-muted-foreground">· {value.classe}</span></span>
+                <span className="min-w-0 flex-1 truncate text-sm">{value.prenom} {value.nom} <span className="text-muted-foreground">· {classeOuExterne(value)}</span></span>
                 <button type="button" onClick={() => onChange(null)} className="text-muted-foreground hover:text-foreground grid size-8 place-items-center" aria-label="Changer de membre">
                     <X className="size-4" />
                 </button>
@@ -46,7 +46,7 @@ export function MembrePicker({ value, onChange, id }: { value: MembreChoisi | nu
                                 onClick={() => { onChange(u); setQuery(""); }}
                             >
                                 <span className="font-medium">{u.prenom} {u.nom}</span>
-                                <span className="text-muted-foreground truncate text-xs">{u.classe} · {u.adresse_mail}</span>
+                                <span className="text-muted-foreground truncate text-xs">{classeOuExterne(u)} · {u.adresse_mail}</span>
                             </button>
                         </li>
                     ))}

@@ -7,6 +7,7 @@ import { Loader2, MessageCircle } from "lucide-react";
 import { toast } from "sonner";
 import { OrnateCard } from "@/components/brand/OrnateCard";
 import { PasswordInput } from "@/components/common/PasswordForm";
+import { SchoolEmailField, StatutChoix } from "@/components/common/SchoolEmailField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -18,6 +19,7 @@ export default function RegisterPage() {
     const router = useRouter();
     const { login } = useAuth();
     const [form, setForm] = useState({ prenom: "", nom: "", adresse_mail: "", classe: "", password: "" });
+    const [externe, setExterne] = useState(false);
     const [loading, setLoading] = useState(false);
     const [err, setErr] = useState<string | null>(null);
     const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
@@ -27,7 +29,12 @@ export default function RegisterPage() {
         setErr(null);
         setLoading(true);
         try {
-            await AuthApi.register({ ...form, adresse_mail: form.adresse_mail.trim() });
+            await AuthApi.register({
+                ...form,
+                adresse_mail: form.adresse_mail.trim(),
+                externe,
+                classe: externe ? null : form.classe.trim(),
+            });
             await login(form.adresse_mail.trim(), form.password);
             toast.success(`Bienvenue dans l'association, ${form.prenom} !`);
             router.replace("/dashboard");
@@ -57,13 +64,33 @@ export default function RegisterPage() {
                         </div>
                     </div>
                     <div className="space-y-1.5">
-                        <Label htmlFor="mail">Email</Label>
-                        <Input id="mail" type="email" inputMode="email" value={form.adresse_mail} onChange={set("adresse_mail")} required autoComplete="email" />
+                        <Label>Je suis…</Label>
+                        <StatutChoix
+                            externe={externe}
+                            onChange={(v) => {
+                                setExterne(v);
+                                setForm((f) => ({ ...f, adresse_mail: "" }));
+                            }}
+                        />
                     </div>
-                    <div className="space-y-1.5">
-                        <Label htmlFor="classe">Classe</Label>
-                        <Input id="classe" value={form.classe} onChange={set("classe")} required maxLength={50} placeholder="ex. 3A-INFO" />
-                    </div>
+                    {externe ? (
+                        <div className="space-y-1.5">
+                            <Label htmlFor="mail">Email</Label>
+                            <Input id="mail" type="email" inputMode="email" value={form.adresse_mail} onChange={set("adresse_mail")} required autoComplete="email" placeholder="ton.adresse@exemple.fr" />
+                            <p className="text-muted-foreground text-xs">Membre extérieur à l&apos;école : n&apos;importe quelle adresse, pas de classe.</p>
+                        </div>
+                    ) : (
+                        <>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="mail">Adresse de l&apos;école</Label>
+                                <SchoolEmailField id="mail" value={form.adresse_mail} onChange={(v) => setForm((f) => ({ ...f, adresse_mail: v }))} required />
+                            </div>
+                            <div className="space-y-1.5">
+                                <Label htmlFor="classe">Classe</Label>
+                                <Input id="classe" value={form.classe} onChange={set("classe")} required maxLength={50} placeholder="ex. 3A-INFO" />
+                            </div>
+                        </>
+                    )}
                     <div className="space-y-1.5">
                         <Label htmlFor="pwd">Mot de passe</Label>
                         <PasswordInput id="pwd" value={form.password} onChange={set("password")} required minLength={8} autoComplete="new-password" />

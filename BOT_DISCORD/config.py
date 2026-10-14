@@ -32,3 +32,6 @@ ROLE_TOP3_ID = _int("DISCORD_ROLE_TOP3_ID")      # suit le top 3 du semestre en 
 # ou explicitement pour rattraper le rôle Membre des comptes déjà liés.
 SYNC_ROLES = bool(ROLE_TOP3_ID) or os.getenv("DISCORD_SYNC_ROLES", "").strip().lower() in ("1", "true", "oui", "yes")
 ROLES_INTERVALLE_MIN = int(os.getenv("ROLES_INTERVALLE_MIN", "15"))
+
+# Domaine des adresses de l'école (identique à l'API) : « j.dupont » devient j.dupont@<domaine>
+EMAIL_DOMAINE_ECOLE = os.getenv("EMAIL_DOMAINE_ECOLE", "myskolae.fr").strip().lower().lstrip("@")
