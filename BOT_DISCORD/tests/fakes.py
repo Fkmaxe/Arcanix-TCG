@@ -166,9 +166,10 @@ class FakeBot:
     api: Any
     channel: FakeChannel = field(default_factory=FakeChannel)
     mp: dict = field(default_factory=dict)  # messages privés envoyés : {user_id: [embed]}
+    salons: dict = field(default_factory=dict)  # salons distincts par identifiant, sinon `channel`
 
     def get_channel(self, _id):
-        return self.channel
+        return self.salons.get(_id, self.channel)
 
     async def fetch_user(self, uid: int):
         bot = self

@@ -1,4 +1,4 @@
-"""Annonces automatiques : nouvelles séances, rappels la veille, podium de fin de semestre."""
+"""Publications automatiques : séances et rappels dans le salon des annonces, résultats et podium dans celui des points."""
 import logging
 
 import discord
@@ -11,6 +11,11 @@ from utils.api import ApiError
 from .inscriptions import vue_inscription
 
 log = logging.getLogger("arcanix.annonces")
+
+
+def salon_de(type_annonce: str) -> int | None:
+    """Salon où publier ce type d'annonce."""
+    return config.POINTS_CHANNEL_ID if type_annonce in ("resultats", "podium") else config.ANNONCES_CHANNEL_ID
 
 
 def construire(a: dict) -> tuple[discord.Embed, discord.ui.View | None]:
@@ -51,24 +56,17 @@ def construire(a: dict) -> tuple[discord.Embed, discord.ui.View | None]:
 class Annonces(commands.Cog):
     def __init__(self, bot):
         self.bot = bot
-        if config.ANNONCES_CHANNEL_ID:
+        if config.ANNONCES_CHANNEL_ID or config.POINTS_CHANNEL_ID:
             self.boucle.change_interval(minutes=config.ANNONCES_INTERVALLE_MIN)
             self.boucle.start()
         else:
-            log.info("DISCORD_ANNONCES_CHANNEL_ID non défini : annonces automatiques désactivées")
+            log.info("DISCORD_ANNONCES_CHANNEL_ID et DISCORD_POINTS_CHANNEL_ID non définis : annonces automatiques désactivées")
 
     def cog_unload(self):
         self.boucle.cancel()
 
     @tasks.loop(minutes=5)
     async def boucle(self):
-        channel = self.bot.get_channel(config.ANNONCES_CHANNEL_ID)
-        if channel is None:
-            try:
-                channel = await self.bot.fetch_channel(config.ANNONCES_CHANNEL_ID)
-            except discord.DiscordException as e:
-                log.error("Salon d'annonces inaccessible (%s) : %s", config.ANNONCES_CHANNEL_ID, e)
-                return
         try:
             annonces = await self.bot.api.annonces_en_attente()
         except ApiError as e:
@@ -76,7 +74,16 @@ class Annonces(commands.Cog):
             return
         faites = []
         mention = f"<@&{config.ANNONCES_ROLE_ID}>" if config.ANNONCES_ROLE_ID else None
+        salons: dict[int, discord.abc.Messageable | None] = {}
         for a in annonces:
+            channel_id = salon_de(a["type"])
+            if not channel_id:
+                continue  # salon non configuré : l'annonce attend qu'il le soit
+            if channel_id not in salons:
+                salons[channel_id] = await self._salon(channel_id)
+            channel = salons[channel_id]
+            if channel is None:
+                continue
             e, view = construire(a)
             contenu = mention if a["type"] != "rappel" else None
             try:
@@ -90,6 +97,15 @@ class Annonces(commands.Cog):
                 log.info("%d annonce(s) publiée(s)", len(faites))
             except ApiError as err:
                 log.error("Acquittement des annonces échoué : %s", err.message)
+
+    async def _salon(self, channel_id: int):
+        channel = self.bot.get_channel(channel_id)
+        if channel is None:
+            try:
+                channel = await self.bot.fetch_channel(channel_id)
+            except discord.DiscordException as e:
+                log.error("Salon %s inaccessible : %s", channel_id, e)
+        return channel
 
     @staticmethod
     async def _publier(channel, contenu, e: discord.Embed, view: discord.ui.View | None):

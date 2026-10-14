@@ -106,6 +106,7 @@ async def test_parcours_complet_du_bot():
 
         # 8. Annonces : la nouvelle séance est publiée une seule fois
         annonces = Annonces(bot)
+        config.ANNONCES_CHANNEL_ID = config.POINTS_CHANNEL_ID = 1
         await annonces.boucle.coro(annonces)
         titres = [m.embed.title for m in bot.channel.messages]
         assert f"🔥 Nouvelle séance : E2E {nouveau.id}" in titres

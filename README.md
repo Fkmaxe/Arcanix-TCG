@@ -107,7 +107,8 @@ de l'ancienne version serait aussi reconnue et migrée sans perte (voir `0002_re
 
 1. Dans le [portail développeur](https://discord.com/developers/applications), régénérer le token du bot et le mettre dans `DISCORD_TOKEN`.
 2. Mettre la même valeur aléatoire dans `DISCORD_BOT_TOKEN` (secret partagé API ↔ bot).
-3. Renseigner `DISCORD_GUILD_ID` (commandes disponibles immédiatement) et `DISCORD_ANNONCES_CHANNEL_ID`.
+3. Renseigner `DISCORD_GUILD_ID` (commandes disponibles immédiatement), puis un salon par sujet :
+   `DISCORD_ANNONCES_CHANNEL_ID` (séances, rappels) et `DISCORD_POINTS_CHANNEL_ID` (résultats, podium).
 4. `FRONTEND_URL` doit être l'URL **publique https** du site pour que les liens et le logo s'affichent dans Discord.
 
 | Commande | Effet |
@@ -128,8 +129,13 @@ Les commandes `/mod` sont masquées par défaut aux membres sans la permission �
 on peut les ouvrir à un rôle dans *Paramètres du serveur → Intégrations → Arcanix*. Dans tous les cas,
 l'API vérifie que l'auteur est `moderator` ou `admin` sur le site (compte lié).
 
-**Annonces automatiques** (toutes les 5 min) : nouvelle séance et rappel la veille (avec boutons d'inscription),
-résultats de tournoi, et podium du semestre quand un admin définit un nouveau « semestre en cours ».
+**Publications automatiques** (toutes les 5 min), chacune dans son salon :
+
+| Salon | Contenu |
+|---|---|
+| Annonces (`DISCORD_ANNONCES_CHANNEL_ID`) | nouvelle séance et rappel la veille, avec boutons d'inscription |
+| Points (`DISCORD_POINTS_CHANNEL_ID`, sinon le salon des annonces) | résultats de tournoi, podium du semestre quand un admin définit un nouveau « semestre en cours » |
+| Points, via `DISCORD_WEBHOOK_URL` (optionnel, envoyé par l'API) | présences validées depuis le site et points gagnés |
 
 **Rôles automatiques** (optionnels) :
 - `DISCORD_ROLE_MEMBRE_ID` : donné dès `/register` ou `/lier` ;

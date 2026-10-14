@@ -18,8 +18,10 @@ FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000").rstrip("/")
 
 # Synchronisation instantanée des commandes sur un serveur (sinon global, ~1 h)
 GUILD_ID = _int("DISCORD_GUILD_ID")
-# Salon des annonces automatiques (nouvelles séances, rappels, podiums)
+# Salon des annonces automatiques (nouvelles séances, rappels la veille)
 ANNONCES_CHANNEL_ID = _int("DISCORD_ANNONCES_CHANNEL_ID")
+# Salon des points (résultats de tournoi, podium du semestre) ; vide = même salon que les annonces
+POINTS_CHANNEL_ID = _int("DISCORD_POINTS_CHANNEL_ID") or ANNONCES_CHANNEL_ID
 # Rôle à mentionner dans les annonces (optionnel)
 ANNONCES_ROLE_ID = _int("DISCORD_ANNONCES_ROLE_ID")
 ANNONCES_INTERVALLE_MIN = int(os.getenv("ANNONCES_INTERVALLE_MIN", "5"))

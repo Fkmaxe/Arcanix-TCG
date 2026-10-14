@@ -2,11 +2,12 @@
 import discord
 import pytest
 
+import config
 from cogs.annonces import Annonces
 from cogs.compte import Compte, InscriptionModal
 from cogs.membres import Membres
 from cogs.moderation import Moderation, PresenceView, SeanceModal
-from tests.fakes import lancer, FakeApi, FakeBot, FakeInteraction, FakeMessage, FakeUser, remplir, run_async
+from tests.fakes import lancer, FakeApi, FakeBot, FakeChannel, FakeInteraction, FakeMessage, FakeUser, remplir, run_async
 from utils.api import ApiError
 
 SEMESTRE = {"id": 2, "annee": 2026, "numero": 1, "actif": True}
@@ -233,19 +234,46 @@ async def test_mod_presence_parcours_complet():
 
 # --- Annonces --------------------------------------------------------------------------------
 @run_async
-async def test_boucle_d_annonces_publie_puis_acquitte():
+async def test_boucle_d_annonces_publie_puis_acquitte(monkeypatch):
     api = FakeApi(annonces_en_attente=[
         {"type": "nouvelle_seance", "id": 9, "seance": SEANCE},
         {"type": "rappel", "id": 9, "seance": SEANCE},
         {"type": "podium", "id": 1, "semestre": SEMESTRE, "podium": []},
     ])
     bot = FakeBot(api)
-    cog = Annonces(bot)  # salon non configuré : la boucle ne démarre pas toute seule
+    cog = Annonces(bot)  # salons configurés après coup : la boucle ne démarre pas toute seule
+    monkeypatch.setattr(config, "ANNONCES_CHANNEL_ID", 1)
+    monkeypatch.setattr(config, "POINTS_CHANNEL_ID", 1)
     await cog.boucle.coro(cog)
     titres = [m.embed.title for m in bot.channel.messages]
     assert titres[0] == "🔥 Nouvelle séance : Draft Magic" and titres[1].startswith("⏰") and titres[2].startswith("🏆")
     assert api.appels_de("annonces_ack")[0][0][0] == [
         {"type": "nouvelle_seance", "id": 9}, {"type": "rappel", "id": 9}, {"type": "podium", "id": 1}]
+
+
+@run_async
+async def test_annonces_et_points_dans_des_salons_separes(monkeypatch):
+    resultats = {"type": "resultats", "id": 9, "seance": SEANCE, "resultats": []}
+    api = FakeApi(annonces_en_attente=[
+        {"type": "nouvelle_seance", "id": 9, "seance": SEANCE},
+        resultats,
+        {"type": "podium", "id": 1, "semestre": SEMESTRE, "podium": []},
+    ])
+    annonces, points = FakeChannel(), FakeChannel()
+    bot = FakeBot(api, salons={1: annonces, 2: points})
+    cog = Annonces(bot)
+    monkeypatch.setattr(config, "ANNONCES_CHANNEL_ID", 1)
+    monkeypatch.setattr(config, "POINTS_CHANNEL_ID", 2)
+    await cog.boucle.coro(cog)
+    assert [m.embed.title[0] for m in annonces.messages] == ["🔥"]
+    assert [m.embed.title[0] for m in points.messages] == ["⚔", "🏆"]
+
+    # Salon des annonces non configuré : seules les annonces de points partent et sont acquittées
+    api.reponses["annonces_en_attente"] = [{"type": "rappel", "id": 9, "seance": SEANCE}, resultats]
+    monkeypatch.setattr(config, "ANNONCES_CHANNEL_ID", None)
+    await cog.boucle.coro(cog)
+    assert len(annonces.messages) == 1
+    assert api.appels_de("annonces_ack")[-1][0][0] == [{"type": "resultats", "id": 9}]
 
 
 @run_async

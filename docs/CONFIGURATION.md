@@ -78,6 +78,7 @@ Génère une valeur **différente** pour chaque variable secrète.
 | `DISCORD_BOT_TOKEN` | **oui** | *(secret)* | API **et** bot |
 | `DISCORD_GUILD_ID` | fortement conseillé | `1234567890123456789` | bot |
 | `DISCORD_ANNONCES_CHANNEL_ID` | non (vide = pas d'annonces) | `1234567890123456789` | bot |
+| `DISCORD_POINTS_CHANNEL_ID` | non (vide = salon des annonces) | `1234567890123456789` | bot |
 | `DISCORD_ANNONCES_ROLE_ID` | non | `1234567890123456789` | bot |
 | `DISCORD_ROLE_MEMBRE_ID` | non | `1234567890123456789` | bot |
 | `DISCORD_ROLE_TOP3_ID` | non | `1234567890123456789` | bot |
@@ -333,17 +334,24 @@ Identifiant du **serveur Discord de l'association** (clic droit sur l'icône du 
 - **Requis** pour la synchronisation des rôles (`DISCORD_ROLE_TOP3_ID`, `DISCORD_SYNC_ROLES`).
 - Au démarrage, le bot **supprime les commandes globales** restées de l'ancienne version (l'ancien `/register` à 4 champs). Sans ça, Discord afficherait chaque commande en double.
 
-### `DISCORD_ANNONCES_CHANNEL_ID`
-Salon où le bot publie automatiquement, toutes les 5 minutes s'il y a du nouveau :
-- les **nouvelles séances**, avec les boutons « Je viens » et « Je ne viens plus » ;
-- un **rappel la veille** ;
-- les **résultats de tournoi** ;
-- le **podium** à la fin d'un semestre.
+### Salons : un par sujet
+Le bot publie automatiquement, toutes les 5 minutes s'il y a du nouveau. Chaque sujet a son salon :
 
-Indications :
-- **Valeur** : identifiant du salon, par exemple `#annonces` ou `#séances`.
-- Vide = annonces désactivées.
-- Le bot doit pouvoir **voir** ce salon et y **écrire**, ce qui se règle dans les permissions du salon.
+| Salon conseillé | Variable | Contenu |
+|---|---|---|
+| `#annonces` | `DISCORD_ANNONCES_CHANNEL_ID` | **nouvelles séances** (boutons « Je viens » / « Je ne viens plus ») et **rappel la veille** |
+| `#points` | `DISCORD_POINTS_CHANNEL_ID` | **résultats de tournoi** et **podium** de fin de semestre |
+| `#points` | `DISCORD_WEBHOOK_URL` | **présences validées** depuis le site, avec les points gagnés |
+
+Le bot doit pouvoir **voir** chaque salon et y **écrire**, ce qui se règle dans les permissions du salon.
+
+### `DISCORD_ANNONCES_CHANNEL_ID`
+- **Valeur** : identifiant du salon des annonces, par exemple `#annonces` ou `#séances`.
+- Vide = pas d'annonces de séances ni de rappels.
+
+### `DISCORD_POINTS_CHANNEL_ID`
+- **Valeur** : identifiant du salon des points, par exemple `#points` ou `#classement`.
+- Vide = résultats et podium publiés dans le salon des annonces (comportement d'avant la séparation).
 
 ### `DISCORD_ANNONCES_ROLE_ID`
 Rôle **mentionné** dans les annonces de nouvelle séance, de résultats et de podium, mais pas dans les rappels.
@@ -372,9 +380,9 @@ Rôle attribué aux **3 premiers du classement du semestre en cours** et retiré
 - Si `DISCORD_ROLE_TOP3_ID` est rempli, la synchronisation est activée automatiquement, quelle que soit cette valeur.
 
 ### `DISCORD_WEBHOOK_URL`
-Optionnel et indépendant du bot : un message est posté quand des présences sont validées depuis le site.
-- **Valeur** : *Paramètres du salon → Intégrations → Webhooks → Nouveau webhook → Copier l'URL du webhook*.
-- Vide = désactivé. Il fait un peu doublon avec les annonces du bot : à toi de voir.
+Optionnel et indépendant du bot : l'API poste un message quand des présences sont validées depuis le site (membres et points gagnés).
+- **Valeur** : dans le **salon des points**, *Paramètres du salon → Intégrations → Webhooks → Nouveau webhook → Copier l'URL du webhook*. Le salon est fixé par le webhook lui-même.
+- Vide = désactivé.
 - ⚠️ L'ancien webhook a circulé en clair : **supprime-le** dans Discord et crée-en un nouveau si tu veux garder la fonction.
 
 ---
@@ -430,6 +438,7 @@ DISCORD_TOKEN=MTMx…(jeton régénéré dans le Developer Portal)
 DISCORD_BOT_TOKEN=P4nW8qZ1xC6vB3mL9kJ2hG5fD7sA0tR
 DISCORD_GUILD_ID=1102345678901234567
 DISCORD_ANNONCES_CHANNEL_ID=1102345678901234999
+DISCORD_POINTS_CHANNEL_ID=1102345678901235000
 DISCORD_ANNONCES_ROLE_ID=
 DISCORD_ROLE_MEMBRE_ID=1102345678901235111
 DISCORD_ROLE_TOP3_ID=1102345678901235222
@@ -495,7 +504,7 @@ docker compose config
 | `/register` reste sur « … réfléchit » | Ancienne version du bot : bouton refusé par Discord car `FRONTEND_URL` vaut `localhost` | Mettre à jour (le lien est désormais écrit en texte si l'adresse n'est pas publique) et renseigner l'adresse publique du site dans `FRONTEND_URL` |
 | Le bot ne démarre pas, logs `PrivilegedIntentsRequired` | Rôle Top 3 ou synchro activés sans l'intent | Activer *Server Members Intent* (§7) |
 | Les rôles ne sont pas attribués | Permission *Gérer les rôles* manquante ou rôle du bot trop bas | Remonter le rôle du bot au-dessus des rôles gérés |
-| Aucune annonce publiée | Salon vide ou mauvais identifiant, ou bot sans accès au salon | Vérifier `DISCORD_ANNONCES_CHANNEL_ID` et les permissions du salon ; logs : `docker compose logs discordbot` |
+| Aucune annonce publiée | Salon vide ou mauvais identifiant, ou bot sans accès au salon | Vérifier `DISCORD_ANNONCES_CHANNEL_ID` / `DISCORD_POINTS_CHANNEL_ID` et les permissions des salons ; logs : `docker compose logs discordbot` |
 | « L'envoi d'emails n'est pas configuré » | `SMTP_HOST` vide | §6 |
 | Les emails ne partent pas | Identifiants, port ou sécurité incorrects | `docker compose logs api \| grep -i email` donne la cause |
 | Les emails arrivent en spam | Domaine non vérifié chez le fournisseur | Vérifier l'expéditeur et ajouter SPF/DKIM (§6) |
