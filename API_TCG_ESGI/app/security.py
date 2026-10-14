@@ -147,3 +147,16 @@ def consommer_jeton(db: Session, valeur: str, type_: str) -> Utilisateur:
 def lien_mot_de_passe(db: Session, user: Utilisateur) -> tuple[str, int]:
     valeur, duree = creer_jeton(db, user, "definir_mdp")
     return f"{config.FRONTEND_URL}/activer?jeton={valeur}", duree
+
+
+# --- Désinscription des emails d'annonce (lien en un clic, sans connexion) ----------------------
+def signature_desabonnement(user_id: int) -> str:
+    return hmac.new(config.JWT_SECRET.encode(), f"desabonner:{user_id}".encode(), hashlib.sha256).hexdigest()[:32]
+
+
+def lien_desabonnement(user_id: int) -> str:
+    return f"{config.FRONTEND_URL}/desabonnement?u={user_id}&s={signature_desabonnement(user_id)}"
+
+
+def signature_desabonnement_valide(user_id: int, signature: str) -> bool:
+    return hmac.compare_digest(signature_desabonnement(user_id), signature or "")

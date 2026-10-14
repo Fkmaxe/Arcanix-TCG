@@ -40,3 +40,8 @@ SMTP_ACTIF = bool(SMTP_HOST)
 # Pointage par QR code
 QR_PERIODE_S = int(os.getenv("QR_PERIODE_S", "30"))
 POINTAGE_DUREE_H = int(os.getenv("POINTAGE_DUREE_H", "4"))
+
+# Domaine des adresses de l'école : un membre « interne » doit s'inscrire avec une adresse de ce domaine
+EMAIL_DOMAINE_ECOLE = os.getenv("EMAIL_DOMAINE_ECOLE", "myskolae.fr").strip().lower().lstrip("@")
+# Fréquence de vérification des emails d'annonce programmés
+PLANIFICATEUR_INTERVALLE_S = int(os.getenv("PLANIFICATEUR_INTERVALLE_S", "60"))

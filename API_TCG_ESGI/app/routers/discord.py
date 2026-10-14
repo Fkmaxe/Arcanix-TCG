@@ -49,7 +49,7 @@ def inscription(body: DiscordRegister, db: Session = Depends(get_db)):
         raise HTTPException(409, "Cet email a déjà un compte : connecte-toi sur le site puis utilise /lier")
     user = Utilisateur(
         discord_id=body.discord_id, nom=body.nom, prenom=body.prenom, adresse_mail=body.adresse_mail,
-        classe=body.classe, role_utilisateur="user",
+        classe=body.classe, externe=body.externe, role_utilisateur="user",
         mot_de_passe_hash=unusable_password_hash(), doit_changer_mdp=True,
     )
     db.add(user)
@@ -91,7 +91,8 @@ def _profil(db: Session, user: Utilisateur) -> DiscordMembre:
     stats = stats_membre(db, user, semestre_actif(db))
     total = sum(s["points"] for s in points_par_semestre(db, user.id))
     return DiscordMembre(
-        prenom=user.prenom, nom=user.nom, classe=user.classe, role_utilisateur=user.role_utilisateur,
+        prenom=user.prenom, nom=user.nom, classe=user.classe, externe=user.externe,
+        role_utilisateur=user.role_utilisateur, hors_classement=stats["hors_classement"],
         semestre=stats["semestre"], points=stats["points"], rang=stats["rang"],
         presences=stats["presences"], total_points=total,
     )
@@ -178,6 +179,9 @@ def creer_seance(body: DiscordSeanceCreate, db: Session = Depends(get_db)):
         raise HTTPException(422, "Aucun semestre défini : créez-en un sur le site")
     data = body.model_dump(exclude={"auteur_discord_id", "semestre_id"})
     s = Seance(**data, semestre_id=semestre.id)
+    # Créée depuis Discord : annoncée tout de suite sur Discord et par email (si SMTP)
+    vie.appliquer_publication(s, "discord", "immediat", None)
+    vie.appliquer_publication(s, "email", "immediat", None)
     db.add(s)
     db.flush()
     journaliser(db, auteur, "seance.creation", f"Séance « {s.nom} » du {s.date_seance:%d/%m/%Y} créée depuis Discord",
@@ -226,7 +230,8 @@ def annonces_en_attente(db: Session = Depends(get_db)):
     annonces: list[Annonce] = []
 
     nouvelles = (db.query(Seance).options(joinedload(Seance.semestre))
-                 .filter(Seance.annonce_envoyee.is_(False), Seance.date_seance >= aujourd_hui)
+                 .filter(Seance.annonce_envoyee.is_(False), Seance.date_seance >= aujourd_hui,
+                         Seance.discord_publier_le.isnot(None), Seance.discord_publier_le <= func.now())
                  .order_by(Seance.date_seance).limit(10).all())
     for s in seances_out(db, nouvelles):
         annonces.append(Annonce(type="nouvelle_seance", id=s.id, seance=s))

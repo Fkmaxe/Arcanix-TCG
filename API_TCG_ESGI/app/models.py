@@ -36,9 +36,12 @@ class Utilisateur(Base):
     adresse_mail: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     mot_de_passe_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     role_utilisateur: Mapped[str] = mapped_column(String(50), nullable=False)  # 'user' | 'moderator' | 'admin'
-    classe: Mapped[str] = mapped_column(String(50), nullable=False)
+    classe: Mapped[str | None] = mapped_column(String(50))  # obligatoire pour un interne (CHECK)
+    externe: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    annonces_email: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     doit_changer_mdp: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     cree_le: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    __table_args__ = (CheckConstraint("externe OR classe IS NOT NULL", name="utilisateur_classe_interne_check"),)
 
     participations: Mapped[list["Participation"]] = relationship(back_populates="utilisateur", passive_deletes=True)
 
@@ -63,6 +66,10 @@ class Seance(Base):
     pointage_expire_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     # Résultats de tournoi publiés mais pas encore annoncés sur Discord
     resultats_a_annoncer: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    # Publication programmée (NULL = ne pas publier sur ce canal)
+    discord_publier_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    email_publier_le: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    email_envoye: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     __table_args__ = (
         CheckConstraint("nb_point >= 0", name="seance_nb_point_check"),
         CheckConstraint("places_max IS NULL OR places_max > 0", name="seance_places_max_check"),

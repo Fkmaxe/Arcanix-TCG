@@ -1,13 +1,32 @@
 from datetime import date, datetime, time
 from typing import Literal
+from zoneinfo import ZoneInfo
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
+
+from . import config
 
 Role = Literal["user", "moderator", "admin"]
+PARIS = ZoneInfo("Europe/Paris")
 
 
 def _clean(v: str | None) -> str | None:
     return v.strip() if isinstance(v, str) else v
+
+
+def regle_interne_externe(email: str, classe: str | None, externe: bool) -> str | None:
+    """Interne : adresse de l'école et classe obligatoires. Externe : pas de classe.
+
+    Retourne la classe à enregistrer ; lève ValueError (message affiché) si la règle n'est pas respectée.
+    """
+    if externe:
+        return None
+    if not email.lower().endswith(f"@{config.EMAIL_DOMAINE_ECOLE}"):
+        raise ValueError(f"Utilise ton adresse de l'école (@{config.EMAIL_DOMAINE_ECOLE}) ou choisis « Externe »")
+    classe = _clean(classe)
+    if not classe:
+        raise ValueError("Indique ta classe")
+    return classe
 
 
 class ORM(BaseModel):
@@ -44,7 +63,9 @@ class MeOut(BaseModel):
     email: str
     adresse_mail: str
     role_utilisateur: Role
-    classe: str
+    classe: str | None
+    externe: bool
+    annonces_email: bool
     doit_changer_mdp: bool
     discord_lie: bool
 
@@ -55,9 +76,10 @@ class UserBase(BaseModel):
     prenom: str = Field(min_length=1, max_length=100)
     adresse_mail: EmailStr
     role_utilisateur: Role = "user"
-    classe: str = Field(min_length=1, max_length=50)
+    externe: bool = False
+    classe: str | None = Field(default=None, max_length=50)
 
-    @field_validator("nom", "prenom", "classe")
+    @field_validator("nom", "prenom")
     @classmethod
     def _strip(cls, v: str) -> str:
         return v.strip()
@@ -66,6 +88,11 @@ class UserBase(BaseModel):
     @classmethod
     def _lower(cls, v: str) -> str:
         return v.strip().lower()
+
+    @model_validator(mode="after")
+    def _interne_externe(self):
+        self.classe = regle_interne_externe(self.adresse_mail, self.classe, self.externe)
+        return self
 
 
 class UserCreate(UserBase):
@@ -79,7 +106,8 @@ class UserUpdate(BaseModel):
     prenom: str | None = Field(default=None, min_length=1, max_length=100)
     adresse_mail: EmailStr | None = None
     role_utilisateur: Role | None = None
-    classe: str | None = Field(default=None, min_length=1, max_length=50)
+    externe: bool | None = None
+    classe: str | None = Field(default=None, max_length=50)
 
     @field_validator("nom", "prenom", "classe")
     @classmethod
@@ -96,6 +124,7 @@ class MeUpdate(BaseModel):
     nom: str | None = Field(default=None, min_length=1, max_length=100)
     prenom: str | None = Field(default=None, min_length=1, max_length=100)
     classe: str | None = Field(default=None, min_length=1, max_length=50)
+    annonces_email: bool | None = None
 
     @field_validator("nom", "prenom", "classe")
     @classmethod
@@ -109,7 +138,9 @@ class UserOut(ORM):
     prenom: str
     adresse_mail: str
     role_utilisateur: str
-    classe: str
+    classe: str | None = None
+    externe: bool = False
+    annonces_email: bool = True
     discord_id: str | None = None
     doit_changer_mdp: bool = False
 
@@ -137,6 +168,7 @@ class MotDePasseOublie(BaseModel):
 class ConfigPublique(BaseModel):
     smtp: bool
     qr_periode_s: int
+    domaine_ecole: str
 
 
 class CodeDiscord(BaseModel):
@@ -188,11 +220,40 @@ class SeanceBase(BaseModel):
         return _clean(v) or None
 
 
-class SeanceCreate(SeanceBase):
-    pass
+ModePublication = Literal["immediat", "programme", "jamais"]
 
 
-class SeanceUpdate(BaseModel):
+def _horodatage(v: datetime | None) -> datetime | None:
+    """Une date sans fuseau est comprise à l'heure de Paris."""
+    return v.replace(tzinfo=PARIS) if v is not None and v.tzinfo is None else v
+
+
+class PublicationIn(BaseModel):
+    """Quand annoncer la séance sur Discord et par email."""
+    discord_mode: ModePublication | None = None
+    discord_le: datetime | None = None
+    email_mode: ModePublication | None = None
+    email_le: datetime | None = None
+
+    @field_validator("discord_le", "email_le")
+    @classmethod
+    def _fuseau(cls, v):
+        return _horodatage(v)
+
+    @model_validator(mode="after")
+    def _date_si_programme(self):
+        for canal, nom in (("discord", "Discord"), ("email", "l'email")):
+            if getattr(self, f"{canal}_mode") == "programme" and getattr(self, f"{canal}_le") is None:
+                raise ValueError(f"Choisis la date et l'heure de publication pour {nom}")
+        return self
+
+
+class SeanceCreate(SeanceBase, PublicationIn):
+    discord_mode: ModePublication = "immediat"
+    email_mode: ModePublication = "immediat"
+
+
+class SeanceUpdate(PublicationIn):
     nom: str | None = Field(default=None, min_length=1, max_length=150)
     date_seance: date | None = None
     heure_debut: time | None = None
@@ -227,6 +288,10 @@ class SeanceOut(ORM):
     nb_attente: int = 0
     mon_inscription: Literal["inscrit", "attente"] | None = None
     a_resultats: bool = False
+    discord_publier_le: datetime | None = None
+    annonce_envoyee: bool = False
+    email_publier_le: datetime | None = None
+    email_envoye: bool = False
 
 
 class ParticipantDetail(BaseModel):
@@ -236,7 +301,7 @@ class ParticipantDetail(BaseModel):
     commentaire: str | None = None
     nom: str
     prenom: str
-    classe: str
+    classe: str | None = None
     adresse_mail: str | None = None
     discord_lie: bool = False
 
@@ -245,7 +310,7 @@ class MembreResume(BaseModel):
     utilisateur_id: int
     prenom: str
     nom: str
-    classe: str
+    classe: str | None = None
     discord_lie: bool = False
 
 
@@ -474,6 +539,7 @@ class MesStats(BaseModel):
     semestre: SemestreOut | None
     points: float
     rang: int | None
+    hors_classement: bool = False  # modération et admins : jamais classés
     nb_membres_classes: int
     seances_semestre: int
     presences: int
@@ -486,7 +552,7 @@ class LigneClassement(BaseModel):
     userId: int
     prenom: str
     nom: str  # initiale seulement pour les membres, complet pour la modération
-    classe: str
+    classe: str | None = None
     points: float
     presences: int
     bonus: float = 0
@@ -504,9 +570,10 @@ class DiscordRegister(BaseModel):
     nom: str = Field(min_length=1, max_length=100)
     prenom: str = Field(min_length=1, max_length=100)
     adresse_mail: EmailStr
-    classe: str = Field(min_length=1, max_length=50)
+    externe: bool = False
+    classe: str | None = Field(default=None, max_length=50)
 
-    @field_validator("nom", "prenom", "classe")
+    @field_validator("nom", "prenom")
     @classmethod
     def _strip(cls, v: str) -> str:
         return v.strip()
@@ -515,6 +582,11 @@ class DiscordRegister(BaseModel):
     @classmethod
     def _lower(cls, v: str) -> str:
         return v.strip().lower()
+
+    @model_validator(mode="after")
+    def _interne_externe(self):
+        self.classe = regle_interne_externe(self.adresse_mail, self.classe, self.externe)
+        return self
 
 
 class DiscordLier(BaseModel):
@@ -546,11 +618,13 @@ class DiscordPresencesOut(BaseModel):
 class DiscordMembre(BaseModel):
     prenom: str
     nom: str
-    classe: str
+    classe: str | None = None
+    externe: bool = False
     role_utilisateur: str
     semestre: SemestreOut | None
     points: float
     rang: int | None
+    hors_classement: bool = False
     presences: int
     total_points: float
 

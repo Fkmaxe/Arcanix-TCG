@@ -15,6 +15,7 @@ os.environ.setdefault("JWT_SECRET", "secret-de-test")
 os.environ["DISCORD_BOT_TOKEN"] = "bot-test"
 os.environ["DISCORD_WEBHOOK_URL"] = ""
 os.environ["FRONTEND_URL"] = "https://arcanix.test"
+os.environ["EMAIL_DOMAINE_ECOLE"] = "ex.com"  # domaine « école » des tests
 
 
 def _recreer_base():

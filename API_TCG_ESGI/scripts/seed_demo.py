@@ -2,9 +2,10 @@
 
 Usage : python -m scripts.seed_demo
 Comptes créés (mot de passe « arcanix123 ») : admin@arcanix.fr, modo@arcanix.fr, membre@arcanix.fr
+(comptes externes), plus des élèves en @myskolae.fr et quelques externes.
 """
 import random
-from datetime import date, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 
 from app.database import SessionLocal
 from app.models import Ajustement, Inscription, Participation, Resultat, Seance, Semestre, Utilisateur
@@ -25,14 +26,16 @@ def main() -> None:
     random.seed(42)
     pwd = hash_password("arcanix123")
     staff = [
-        Utilisateur(nom="Grados", prenom="Maxence", adresse_mail="admin@arcanix.fr", role_utilisateur="admin", classe="5A-INFO", mot_de_passe_hash=pwd, discord_id="100"),
-        Utilisateur(nom="Lambert", prenom="Elise", adresse_mail="modo@arcanix.fr", role_utilisateur="moderator", classe="4A-INFO", mot_de_passe_hash=pwd),
-        Utilisateur(nom="Fontaine", prenom="Jules", adresse_mail="membre@arcanix.fr", role_utilisateur="user", classe="3A-INFO", mot_de_passe_hash=pwd),
+        Utilisateur(nom="Grados", prenom="Maxence", adresse_mail="admin@arcanix.fr", role_utilisateur="admin", externe=True, mot_de_passe_hash=pwd, discord_id="100"),
+        Utilisateur(nom="Lambert", prenom="Elise", adresse_mail="modo@arcanix.fr", role_utilisateur="moderator", externe=True, mot_de_passe_hash=pwd),
+        Utilisateur(nom="Fontaine", prenom="Jules", adresse_mail="membre@arcanix.fr", role_utilisateur="user", externe=True, mot_de_passe_hash=pwd),
     ]
     membres = [
-        Utilisateur(nom=n, prenom=p, adresse_mail=f"{p.lower()}.{n.lower()}@exemple.fr".replace("é", "e").replace("è", "e").replace("ï", "i"),
-                    role_utilisateur="user", classe=random.choice(["1A", "2A", "3A-INFO", "4A-SEC"]), mot_de_passe_hash=pwd,
-                    discord_id=str(1000 + i) if i % 3 else None)
+        Utilisateur(nom=n, prenom=p, role_utilisateur="user", mot_de_passe_hash=pwd, discord_id=str(1000 + i) if i % 3 else None,
+                    # Élèves (adresse de l'école + classe) et quelques externes (adresse perso, pas de classe)
+                    **({"externe": True, "adresse_mail": f"{p.lower()}.{n.lower()}@gmail.com".replace("é", "e").replace("ë", "e").replace("ï", "i")} if i % 6 == 5 else {
+                        "adresse_mail": f"{p[0].lower()}.{n.lower()}@myskolae.fr".replace("é", "e"),
+                        "classe": random.choice(["1A", "2A", "3A-INFO", "4A-SEC"])}))
         for i, (p, n) in enumerate(zip(PRENOMS, NOMS, strict=True))
     ]
     db.add_all(staff + membres)
@@ -50,7 +53,8 @@ def main() -> None:
             nom=nom, jeu=jeu, date_seance=jour, heure_debut=time(18, 30), lieu=random.choice(["Salle B204", "Foyer", "Amphi C"]),
             description="Decks fournis pour les débutants. Venez nombreux !" if i % 2 else None,
             nb_point=random.choice([1, 1.5, 2, 3]), semestre_id=(s1 if i < 3 else s2).id,
-            annonce_envoyee=True, rappel_envoye=jour < today,
+            annonce_envoyee=True, rappel_envoye=jour < today, discord_publier_le=datetime.now(UTC),
+            email_envoye=True,
         ))
     db.add_all(seances)
     db.flush()

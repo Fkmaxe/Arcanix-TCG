@@ -7,7 +7,11 @@ from ..mail import mail_reinitialisation
 from ..ratelimit import connexion, ip_client
 from ..models import Utilisateur
 from ..schemas import ConfigPublique, DefinirMotDePasse, LoginRequest, MeOut, MotDePasseOublie, Token
-from ..security import consommer_jeton, create_token, get_current_user, hash_password, lien_mot_de_passe, verify_password
+from ..journal import journaliser
+from ..security import (
+    consommer_jeton, create_token, get_current_user, hash_password, lien_mot_de_passe, signature_desabonnement_valide,
+    verify_password,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -16,7 +20,8 @@ def me_out(user: Utilisateur) -> MeOut:
     return MeOut(
         id=user.id, nom=user.nom, prenom=user.prenom,
         email=user.adresse_mail, adresse_mail=user.adresse_mail,
-        role_utilisateur=user.role_utilisateur, classe=user.classe,
+        role_utilisateur=user.role_utilisateur, classe=user.classe, externe=user.externe,
+        annonces_email=user.annonces_email,
         doit_changer_mdp=user.doit_changer_mdp, discord_lie=bool(user.discord_id),
     )
 
@@ -72,10 +77,24 @@ def mot_de_passe_oublie(body: MotDePasseOublie, request: Request, background: Ba
     return {"message": "Si un compte existe pour cet email, un lien vient d'y être envoyé."}
 
 
+@router.post("/desabonner")
+def desabonner(u: int, s: str, db: Session = Depends(get_db)):
+    """Désinscription en un clic des emails d'annonce (lien signé reçu dans chaque email)."""
+    user = db.get(Utilisateur, u)
+    if not user or not signature_desabonnement_valide(u, s):
+        raise HTTPException(400, "Lien de désinscription invalide")
+    if user.annonces_email:
+        user.annonces_email = False
+        journaliser(db, user, "membre.desabonnement", f"{user.prenom} {user.nom} ne reçoit plus les annonces par email",
+                    membre_id=user.id)
+        db.commit()
+    return {"message": "Tu ne recevras plus les annonces de séances par email."}
+
+
 config_router = APIRouter(tags=["config"])
 
 
 @config_router.get("/config", response_model=ConfigPublique)
 def config_publique():
     """Fonctionnalités disponibles, pour adapter l'interface."""
-    return ConfigPublique(smtp=config.SMTP_ACTIF, qr_periode_s=config.QR_PERIODE_S)
+    return ConfigPublique(smtp=config.SMTP_ACTIF, qr_periode_s=config.QR_PERIODE_S, domaine_ecole=config.EMAIL_DOMAINE_ECOLE)

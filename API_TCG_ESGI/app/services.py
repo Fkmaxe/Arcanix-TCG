@@ -177,17 +177,22 @@ def classement(
     semestre_id: int | None,
     *,
     inclure_zero: bool = False,
+    inclure_staff: bool = False,
     classe: str | None = None,
     user_id: int | None = None,
 ) -> list[dict]:
-    """Points par membre pour un semestre (None = tous semestres confondus)."""
+    """Points par membre pour un semestre (None = tous semestres confondus).
+
+    Modérateurs et admins ne sont pas classés : exclus par défaut ; avec `inclure_staff`
+    (exports, vue modération), ils sont listés avec `rang = None`.
+    """
     seance_join = Seance.id == Participation.seance_id
     if semestre_id:
         seance_join = and_(seance_join, Seance.semestre_id == semestre_id)
     q = (
         select(
             Utilisateur.id, Utilisateur.nom, Utilisateur.prenom, Utilisateur.classe,
-            Utilisateur.adresse_mail, Utilisateur.discord_id,
+            Utilisateur.adresse_mail, Utilisateur.discord_id, Utilisateur.role_utilisateur, Utilisateur.externe,
             _points_expr().label("points"),
             _presences_expr().label("presences"),
         )
@@ -196,6 +201,8 @@ def classement(
         .outerjoin(Seance, seance_join)
         .group_by(Utilisateur.id)
     )
+    if not inclure_staff:
+        q = q.where(Utilisateur.role_utilisateur == "user")
     if classe:
         q = q.where(Utilisateur.classe == classe)
     if user_id:
@@ -207,13 +214,17 @@ def classement(
         b = bonus.get(r.id, 0.0)
         lignes.append({
             "userId": r.id, "nom": r.nom, "prenom": r.prenom, "classe": r.classe,
-            "adresse_mail": r.adresse_mail, "discord_id": r.discord_id,
+            "adresse_mail": r.adresse_mail, "discord_id": r.discord_id, "role": r.role_utilisateur,
+            "externe": r.externe,
             "points": round(float(r.points or 0) + b, 2), "presences": int(r.presences or 0), "bonus": b,
         })
     if not inclure_zero:
         lignes = [l for l in lignes if l["presences"] > 0 or l["points"] != 0 or l["bonus"] != 0]
     lignes.sort(key=lambda l: (-l["points"], -l["presences"], l["prenom"].lower(), l["nom"].lower()))
-    rang_competition(lignes)
+    rang_competition([l for l in lignes if l["role"] == "user"])
+    for l in lignes:
+        if l["role"] != "user":
+            l["rang"] = None
     return lignes
 
 
@@ -231,10 +242,16 @@ def lignes_publiques(lignes: list[dict], viewer_id: int | None, staff: bool) -> 
 def stats_membre(db: Session, user: Utilisateur, semestre: Semestre | None) -> dict:
     """Points, rang, présences et évolution d'un membre sur un semestre."""
     if not semestre:
-        return {"semestre": None, "points": 0.0, "rang": None, "nb_membres_classes": 0,
+        return {"semestre": None, "points": 0.0, "rang": None, "hors_classement": user.role_utilisateur != "user",
+                "nb_membres_classes": 0,
                 "seances_semestre": 0, "presences": 0, "taux_presence": 0.0, "evolution": []}
     lignes = classement(db, semestre.id)
-    moi = next((l for l in lignes if l["userId"] == user.id), None)
+    hors_classement = user.role_utilisateur != "user"
+    if hors_classement:
+        # Le staff n'est pas classé, mais garde ses propres points
+        moi = classement(db, semestre.id, inclure_staff=True, inclure_zero=True, user_id=user.id)[0]
+    else:
+        moi = next((l for l in lignes if l["userId"] == user.id), None)
     nb_seances = db.query(func.count(Seance.id)).filter(
         Seance.semestre_id == semestre.id, Seance.date_seance <= date.today()
     ).scalar() or 0
@@ -259,6 +276,7 @@ def stats_membre(db: Session, user: Utilisateur, semestre: Semestre | None) -> d
         "semestre": SemestreOut.model_validate(semestre),
         "points": moi["points"] if moi else 0.0,
         "rang": moi["rang"] if moi else None,
+        "hors_classement": hors_classement,
         "nb_membres_classes": len(lignes),
         "seances_semestre": nb_seances,
         "presences": presences,

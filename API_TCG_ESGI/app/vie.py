@@ -4,6 +4,7 @@ import hmac
 import secrets
 import time
 from datetime import date, timedelta
+from zoneinfo import ZoneInfo
 
 from fastapi import HTTPException
 from sqlalchemy import func
@@ -13,6 +14,8 @@ from . import config
 from .journal import journaliser
 from .models import Ajustement, Inscription, Participation, Pointage, Resultat, Seance, Utilisateur
 from .security import utcnow
+
+PARIS = ZoneInfo("Europe/Paris")
 
 
 # --- Inscriptions ------------------------------------------------------------------------
@@ -151,3 +154,34 @@ def enregistrer_resultats(db: Session, seance: Seance, lignes: list[dict], barem
                     membre_id=u.id, seance_id=seance.id, details={"place": place, "bonus": bonus})
     seance.resultats_a_annoncer = bool(lignes)
     db.flush()
+
+
+# --- Publication programmée (Discord et email) -------------------------------------------------
+CHAMPS_PUBLICATION = ("discord_mode", "discord_le", "email_mode", "email_le")
+
+
+def appliquer_publication(seance: Seance, canal: str, mode: str | None, le) -> str | None:
+    """Traduit le choix « immédiat / programmé / jamais » en horodatage sur la séance.
+
+    Retourne une description pour le journal, ou None si rien ne change.
+    """
+    if mode is None:
+        return None
+    deja = seance.annonce_envoyee if canal == "discord" else seance.email_envoye
+    if deja:
+        raise HTTPException(409, "Déjà annoncée sur Discord" if canal == "discord" else "L'email d'annonce est déjà parti")
+    if canal == "email" and not config.SMTP_ACTIF:
+        if mode == "programme":
+            raise HTTPException(409, "L'envoi d'emails n'est pas configuré : impossible de programmer l'email")
+        mode = "jamais"  # « dès la création » sans SMTP : rien à envoyer
+    valeur = utcnow() if mode == "immediat" else (le if mode == "programme" else None)
+    attr = f"{canal}_publier_le"
+    if getattr(seance, attr) == valeur and mode != "immediat":
+        return None
+    setattr(seance, attr, valeur)
+    libelle = "Discord" if canal == "discord" else "email"
+    if valeur is None:
+        return f"{libelle} : pas de publication"
+    if mode == "immediat":
+        return f"{libelle} : publication immédiate"
+    return f"{libelle} : programmé le {valeur.astimezone(PARIS):%d/%m/%Y à %H:%M}"

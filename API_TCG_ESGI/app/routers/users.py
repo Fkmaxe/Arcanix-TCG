@@ -7,7 +7,7 @@ from ..database import get_db
 from ..journal import journaliser, nom_complet
 from ..mail import mail_invitation, mail_reinitialisation
 from ..models import Utilisateur
-from ..schemas import LienMotDePasse, PasswordChange, UserCreate, UserOut, UserUpdate
+from ..schemas import LienMotDePasse, PasswordChange, UserCreate, UserOut, UserUpdate, regle_interne_externe
 from ..security import (
     get_current_user, get_current_user_optional, hash_password, lien_mot_de_passe, require_roles,
     unusable_password_hash, verify_password,
@@ -90,7 +90,7 @@ def create_user(body: UserCreate, background: BackgroundTasks, db: Session = Dep
 
     user = Utilisateur(
         nom=body.nom, prenom=body.prenom, adresse_mail=body.adresse_mail, classe=body.classe,
-        role_utilisateur=role,
+        externe=body.externe, role_utilisateur=role,
         mot_de_passe_hash=unusable_password_hash() if invitation else hash_password(body.password),
         # Un compte créé par la modération doit choisir son propre mot de passe
         doit_changer_mdp=bool(current),
@@ -126,6 +126,12 @@ def update_user(user_id: int, body: UserUpdate, db: Session = Depends(get_db),
 
     if "adresse_mail" in data and _email_pris(db, data["adresse_mail"], user_id):
         raise HTTPException(409, "Email déjà utilisé")
+    if {"externe", "adresse_mail", "classe"} & data.keys():
+        try:
+            data["classe"] = regle_interne_externe(data.get("adresse_mail", user.adresse_mail),
+                                                   data.get("classe", user.classe), data.get("externe", user.externe))
+        except ValueError as e:
+            raise HTTPException(422, str(e)) from None
     changements = {k: [getattr(user, k), v] for k, v in data.items() if getattr(user, k) != v}
     for k, v in data.items():
         setattr(user, k, v)

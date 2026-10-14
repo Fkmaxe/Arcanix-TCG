@@ -13,7 +13,10 @@ router = APIRouter(prefix="/me", tags=["me"])
 
 @router.patch("", response_model=MeOut)
 def update_me(body: MeUpdate, db: Session = Depends(get_db), user: Utilisateur = Depends(get_current_user)):
-    for k, v in body.model_dump(exclude_unset=True, exclude_none=True).items():
+    data = body.model_dump(exclude_unset=True, exclude_none=True)
+    if "classe" in data and user.externe:
+        raise HTTPException(422, "Les membres externes n'ont pas de classe")
+    for k, v in data.items():
         setattr(user, k, v)
     db.commit()
     return me_out(user)

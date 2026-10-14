@@ -233,10 +233,14 @@ def test_creer_le_premier_admin(client, db):
                        headers={"Authorization": f"Bearer {tok}"}).status_code == 201
 
     # Compte existant (inscrit sur le site) : promotion
-    client.post("/users", json={"nom": "B", "prenom": "Bea", "adresse_mail": "bea@asso.fr", "classe": "1A", "password": "12345678"})
+    r = client.post("/users", json={"nom": "B", "prenom": "Bea", "adresse_mail": "bea@asso.fr", "externe": True,
+                                    "password": "12345678"})
+    assert r.status_code == 201, r.text
     bea, cree, lien = creer_ou_promouvoir(db, "bea@asso.fr")
     db.commit()
     assert not cree and lien is None and bea.role_utilisateur == "admin"
 
     with pytest.raises(ValueError):
-        creer_ou_promouvoir(db, "inconnu@asso.fr")  # nom/prénom/classe manquants
+        creer_ou_promouvoir(db, "inconnu@ex.com", "Ina", "Connu")  # adresse de l'école sans classe
+    externe, cree, _ = creer_ou_promouvoir(db, "ext@gmail.com", "Eve", "Xt")  # hors école : externe, sans classe
+    assert cree and externe.externe and externe.classe is None

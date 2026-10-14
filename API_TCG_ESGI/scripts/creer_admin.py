@@ -18,6 +18,7 @@ import sys
 
 from sqlalchemy.orm import Session
 
+from app import config
 from app.database import SessionLocal
 from app.journal import journaliser
 from app.models import Utilisateur
@@ -37,12 +38,16 @@ def creer_ou_promouvoir(db: Session, email: str, prenom: str | None = None, nom:
                         membre_id=user.id, details={"avant": ancien, "apres": "admin"})
         return user, False, None
 
-    if not (prenom and nom and classe):
-        raise ValueError("Aucun compte avec cet email : --prenom, --nom et --classe sont nécessaires pour le créer")
+    # Adresse de l'école : membre interne (classe obligatoire) ; sinon externe (pas de classe)
+    externe = not email.endswith(f"@{config.EMAIL_DOMAINE_ECOLE}")
+    if not (prenom and nom and (classe or externe)):
+        raise ValueError("Aucun compte avec cet email : --prenom, --nom (et --classe pour une adresse de l'école) "
+                         "sont nécessaires pour le créer")
     if mot_de_passe is not None and len(mot_de_passe) < 8:
         raise ValueError("Le mot de passe doit faire au moins 8 caractères")
     user = Utilisateur(
-        nom=nom.strip(), prenom=prenom.strip(), classe=classe.strip(), adresse_mail=email, role_utilisateur="admin",
+        nom=nom.strip(), prenom=prenom.strip(), classe=None if externe else classe.strip(), externe=externe,
+        adresse_mail=email, role_utilisateur="admin",
         mot_de_passe_hash=hash_password(mot_de_passe) if mot_de_passe else unusable_password_hash(),
         doit_changer_mdp=mot_de_passe is None,
     )
@@ -66,7 +71,8 @@ def main(argv: list[str] | None = None) -> int:
     with SessionLocal() as db:
         existe = db.query(Utilisateur).filter(Utilisateur.adresse_mail == args.email.strip().lower()).first()
         mot_de_passe = None
-        if not existe and not (args.prenom and args.nom and args.classe):
+        externe = not args.email.strip().lower().endswith(f"@{config.EMAIL_DOMAINE_ECOLE}")
+        if not existe and not (args.prenom and args.nom and (args.classe or externe)):
             print("❌ Aucun compte avec cet email : ajoute --prenom, --nom et --classe pour le créer.")
             return 1
         if not existe and not args.lien:

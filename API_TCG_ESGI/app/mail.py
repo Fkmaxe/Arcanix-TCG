@@ -56,34 +56,71 @@ def _texte(titre: str, paragraphes: list[str], bouton: tuple[str, str] | None, n
     return "\n".join(lignes) + "\n\n— Arcanix · Association TCG\n"
 
 
-def envoyer(destinataire: str, sujet: str, titre: str, paragraphes: list[str],
-            bouton: tuple[str, str] | None = None, note: str | None = None) -> bool:
-    if not config.SMTP_ACTIF:
-        log.info("SMTP non configuré : email « %s » non envoyé", sujet)
-        return False
+def _message(destinataire: str, sujet: str, titre: str, paragraphes: list[str],
+             bouton: tuple[str, str] | None = None, note: str | None = None,
+             desabonnement: str | None = None) -> EmailMessage:
     msg = EmailMessage()
     msg["Subject"] = sujet
     msg["From"] = config.SMTP_FROM
     msg["To"] = destinataire
     msg["Message-ID"] = make_msgid(domain="arcanix")
+    if desabonnement:
+        # Lien de désinscription reconnu par Gmail, Outlook… (bouton « Se désabonner »)
+        msg["List-Unsubscribe"] = f"<{desabonnement}>"
+        note = (note + "<br>" if note else "") + (
+            f'Tu ne veux plus recevoir ces annonces ? <a href="{html.escape(desabonnement)}" '
+            f'style="color:#f5c24b">Se désabonner</a>.')
     msg.set_content(_texte(titre, paragraphes, bouton, note))
     msg.add_alternative(_gabarit(titre, paragraphes, bouton, note), subtype="html")
+    return msg
+
+
+def _connexion() -> smtplib.SMTP:
+    if config.SMTP_SECURITE == "ssl":
+        smtp = smtplib.SMTP_SSL(config.SMTP_HOST, config.SMTP_PORT, timeout=15, context=ssl.create_default_context())
+    else:
+        smtp = smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=15)
+    if config.SMTP_SECURITE == "starttls":
+        smtp.starttls(context=ssl.create_default_context())
+    if config.SMTP_USER:
+        smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
+    return smtp
+
+
+def envoyer(destinataire: str, sujet: str, titre: str, paragraphes: list[str],
+            bouton: tuple[str, str] | None = None, note: str | None = None) -> bool:
+    if not config.SMTP_ACTIF:
+        log.info("SMTP non configuré : email « %s » non envoyé", sujet)
+        return False
     try:
-        if config.SMTP_SECURITE == "ssl":
-            smtp = smtplib.SMTP_SSL(config.SMTP_HOST, config.SMTP_PORT, timeout=15, context=ssl.create_default_context())
-        else:
-            smtp = smtplib.SMTP(config.SMTP_HOST, config.SMTP_PORT, timeout=15)
-        with smtp:
-            if config.SMTP_SECURITE == "starttls":
-                smtp.starttls(context=ssl.create_default_context())
-            if config.SMTP_USER:
-                smtp.login(config.SMTP_USER, config.SMTP_PASSWORD)
-            smtp.send_message(msg)
+        with _connexion() as smtp:
+            smtp.send_message(_message(destinataire, sujet, titre, paragraphes, bouton, note))
         log.info("Email « %s » envoyé à %s", sujet, destinataire)
         return True
     except Exception as e:  # un email raté ne doit jamais faire échouer l'API
         log.error("Échec d'envoi de l'email « %s » à %s : %s", sujet, destinataire, e)
         return False
+
+
+def envoyer_lot(messages: list[EmailMessage]) -> int:
+    """Envoie une liste d'emails sur une seule connexion SMTP ; retourne le nombre envoyés.
+
+    Un destinataire refusé n'arrête pas l'envoi aux autres.
+    """
+    if not config.SMTP_ACTIF or not messages:
+        return 0
+    envoyes = 0
+    try:
+        with _connexion() as smtp:
+            for msg in messages:
+                try:
+                    smtp.send_message(msg)
+                    envoyes += 1
+                except smtplib.SMTPRecipientsRefused as e:
+                    log.warning("Destinataire refusé %s : %s", msg["To"], e)
+    except Exception as e:
+        log.error("Envoi groupé interrompu après %d/%d emails : %s", envoyes, len(messages), e)
+    return envoyes
 
 
 # --- Emails métier -------------------------------------------------------------------
@@ -114,3 +151,30 @@ def mail_place_liberee(email: str, prenom: str, seance_nom: str, date_txt: str, 
          "Tu passes de la liste d'attente aux inscrits. Si tu ne peux plus venir, pense à te désinscrire."],
         ("Voir la séance", url),
     )
+
+
+def mail_annonce_seance(seance: dict, destinataires: list[tuple[str, str, str]]) -> int:
+    """Annonce d'une séance à chaque destinataire (email, prénom, lien de désinscription).
+
+    `seance` : nom, date_txt, heure, lieu, jeu, points, places, description, url.
+    """
+    infos = [f"📅 <strong>{html.escape(seance['date_txt'])}</strong>"
+             + (f" à <strong>{html.escape(seance['heure'])}</strong>" if seance.get("heure") else "")]
+    if seance.get("lieu"):
+        infos.append(f"📍 {html.escape(seance['lieu'])}")
+    if seance.get("jeu"):
+        infos.append(f"🃏 {html.escape(seance['jeu'])}")
+    infos.append(f"🔥 +{html.escape(seance['points'])} points par présence")
+    if seance.get("places"):
+        infos.append(f"👥 {html.escape(seance['places'])}")
+    paragraphes = ["<br>".join(infos)]
+    if seance.get("description"):
+        paragraphes.append(html.escape(seance["description"]).replace("\n", "<br>"))
+    paragraphes.append("Inscris-toi pour qu'on prévoie ta place !")
+    messages = [
+        _message(email, f"Nouvelle séance : {seance['nom']}", f"Bonjour {html.escape(prenom)}, une séance arrive !",
+                 [f"<strong>{html.escape(seance['nom'])}</strong>", *paragraphes], ("✋ Je viens", seance["url"]),
+                 desabonnement=lien)
+        for email, prenom, lien in destinataires
+    ]
+    return envoyer_lot(messages)

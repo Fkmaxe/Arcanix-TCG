@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import logging
 from urllib.parse import urlparse
 
@@ -7,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from . import config
+from . import config, planificateur
 from .database import engine
 from .routers import ajustements, auth, discord, journal, me, participations, seances, semestres, stats_exports, users
 
@@ -19,7 +21,18 @@ if not config.DEBUG and (_hote in ("localhost", "127.0.0.1") or "." not in _hote
     log.warning("FRONTEND_URL=%s n'est pas une adresse publique : les liens des emails, du bot et des QR codes "
                 "ne fonctionneront pas pour les membres (voir docs/CONFIGURATION.md)", config.FRONTEND_URL)
 
-app = FastAPI(title="Arcanix", version="2.0.0", debug=config.DEBUG)
+@contextlib.asynccontextmanager
+async def lifespan(_app: FastAPI):
+    tache = asyncio.create_task(planificateur.boucle())
+    try:
+        yield
+    finally:
+        tache.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await tache
+
+
+app = FastAPI(title="Arcanix", version="2.0.0", debug=config.DEBUG, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

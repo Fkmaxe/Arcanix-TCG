@@ -96,11 +96,13 @@ def get_seance(sid: int, db: Session = Depends(get_db),
 @router.post("", response_model=SeanceOut, status_code=201)
 def create_seance(body: SeanceCreate, db: Session = Depends(get_db), moderateur: Utilisateur = Depends(staff)):
     _check_semestre(db, body.semestre_id)
-    s = Seance(**body.model_dump())
+    s = Seance(**body.model_dump(exclude=set(vie.CHAMPS_PUBLICATION)))
+    publication = [vie.appliquer_publication(s, c, getattr(body, f"{c}_mode"), getattr(body, f"{c}_le"))
+                   for c in ("discord", "email")]
     db.add(s)
     db.flush()
     journaliser(db, moderateur, "seance.creation", f"Séance « {s.nom} » du {_date_fr(s.date_seance)} créée "
-                f"({float(s.nb_point):g} pts)", seance_id=s.id)
+                f"({float(s.nb_point):g} pts) · " + " · ".join(p for p in publication if p), seance_id=s.id)
     db.commit()
     return seance_out(db, _get(db, s.id))
 
@@ -110,6 +112,10 @@ def update_seance(sid: int, body: SeanceUpdate, background: BackgroundTasks, db:
                   moderateur: Utilisateur = Depends(staff)):
     s = _get(db, sid)
     data = body.model_dump(exclude_unset=True)
+    publication = [vie.appliquer_publication(s, c, data.get(f"{c}_mode"), data.get(f"{c}_le"))
+                   for c in ("discord", "email")]
+    for champ in vie.CHAMPS_PUBLICATION:
+        data.pop(champ, None)
     for requis in ("nom", "date_seance", "nb_point", "semestre_id"):
         if requis in data and data[requis] is None:
             data.pop(requis)
@@ -127,6 +133,9 @@ def update_seance(sid: int, body: SeanceUpdate, background: BackgroundTasks, db:
         s.annonce_envoyee = False
         s.rappel_envoye = False
     promus = vie.reequilibrer(db, s) if "places_max" in changements else []
+    for p in publication:
+        if p:
+            changements["publication"] = changements.get("publication", []) + [p]
     if changements:
         journaliser(db, moderateur, "seance.modification", f"Séance « {s.nom} » modifiée ({', '.join(changements)})",
                     seance_id=s.id, details=changements)

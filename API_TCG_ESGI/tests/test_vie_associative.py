@@ -229,7 +229,7 @@ def test_mot_de_passe_oublie(client, make_user, emails):
 
 def test_sans_smtp(client, make_user):
     assert config.SMTP_ACTIF is False
-    assert client.get("/config").json() == {"smtp": False, "qr_periode_s": 30}
+    assert client.get("/config").json() == {"smtp": False, "qr_periode_s": 30, "domaine_ecole": "ex.com"}
     assert client.post("/auth/mot-de-passe-oublie", json={"email": "x@ex.com"}).status_code == 503
     admin = make_user("admin")
     r = client.post("/users", headers=auth(admin), json={"nom": "N", "prenom": "P", "adresse_mail": "n@ex.com",
