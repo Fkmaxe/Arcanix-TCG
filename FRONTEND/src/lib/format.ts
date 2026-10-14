@@ -82,12 +82,6 @@ export const libellePlace = (p: number) => (p === 1 ? "1re" : `${p}e`);
 /** Classe d'un membre, ou « Externe » : seuls les membres extérieurs à l'école n'ont pas de classe. */
 export const classeOuExterne = (m: { classe?: string | null }) => m.classe || "Externe";
 
-/** Complète un identifiant de l'école (« j.dupont ») avec le domaine ; laisse une adresse complète intacte. */
-export const completerEmail = (saisie: string, domaine: string) => {
-    const v = saisie.trim();
-    return v && !v.includes("@") ? `${v}@${domaine}` : v;
-};
-
 /** État de publication d'un canal pour la modération : « Publiée le … », « Programmée le … » ou « Non publiée ». */
 export function etatPublication(le: string | null, envoye: boolean): { texte: string; programme: boolean } {
     if (envoye && le) return { texte: `publiée le ${formatDateHeure(le)}`, programme: false };

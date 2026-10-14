@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { useConfig } from "@/lib/useConfig";
 import { cn } from "@/lib/utils";
 
@@ -101,6 +102,55 @@ export function StatutChoix({ externe, onChange }: { externe: boolean; onChange:
                     {label}
                 </button>
             ))}
+        </div>
+    );
+}
+
+/**
+ * Choix du statut + champ email adapté : élève → identifiant suivi de @domaine visible, externe → adresse libre.
+ * Changer de statut vide l'adresse (une adresse d'élève n'a pas de sens côté externe, et inversement).
+ */
+export function EmailSelonStatut({
+    id,
+    value,
+    onChange,
+    autoFocus,
+}: {
+    id: string;
+    value: string;
+    onChange: (email: string) => void;
+    autoFocus?: boolean;
+}) {
+    const [externe, setExterne] = useState(false);
+    return (
+        <div className="space-y-3">
+            <StatutChoix
+                externe={externe}
+                onChange={(v) => {
+                    setExterne(v);
+                    onChange("");
+                }}
+            />
+            <div className="space-y-1.5">
+                <Label htmlFor={id}>{externe ? "Email" : "Adresse de l'école"}</Label>
+                {externe ? (
+                    <Input
+                        id={id}
+                        type="email"
+                        inputMode="email"
+                        autoCapitalize="none"
+                        spellCheck={false}
+                        value={value}
+                        onChange={(e) => onChange(e.target.value.trim())}
+                        required
+                        autoComplete="username"
+                        autoFocus={autoFocus}
+                        placeholder="ton.adresse@exemple.fr"
+                    />
+                ) : (
+                    <SchoolEmailField id={id} value={value} onChange={onChange} required autoFocus={autoFocus} />
+                )}
+            </div>
         </div>
     );
 }
