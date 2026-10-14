@@ -178,13 +178,17 @@ def classement(
     *,
     inclure_zero: bool = False,
     inclure_staff: bool = False,
+    inclure_externes: bool = False,
     classe: str | None = None,
     user_id: int | None = None,
 ) -> list[dict]:
     """Points par membre pour un semestre (None = tous semestres confondus).
 
-    Modérateurs et admins ne sont pas classés : exclus par défaut ; avec `inclure_staff`
-    (exports, vue modération), ils sont listés avec `rang = None`.
+    Seuls les élèves sont classés :
+    - modérateurs et admins sont exclus par défaut ; avec `inclure_staff` (exports, vue modération),
+      ils sont listés avec `rang = None` ;
+    - les membres externes ne figurent ni au classement ni dans les exports ; `inclure_externes`
+      ne sert qu'à relire les points d'un externe pour lui-même.
     """
     seance_join = Seance.id == Participation.seance_id
     if semestre_id:
@@ -203,6 +207,8 @@ def classement(
     )
     if not inclure_staff:
         q = q.where(Utilisateur.role_utilisateur == "user")
+    if not inclure_externes:
+        q = q.where(Utilisateur.externe.is_(False))
     if classe:
         q = q.where(Utilisateur.classe == classe)
     if user_id:
@@ -221,9 +227,10 @@ def classement(
     if not inclure_zero:
         lignes = [l for l in lignes if l["presences"] > 0 or l["points"] != 0 or l["bonus"] != 0]
     lignes.sort(key=lambda l: (-l["points"], -l["presences"], l["prenom"].lower(), l["nom"].lower()))
-    rang_competition([l for l in lignes if l["role"] == "user"])
+    classes = [l for l in lignes if l["role"] == "user" and not l["externe"]]
+    rang_competition(classes)
     for l in lignes:
-        if l["role"] != "user":
+        if l["role"] != "user" or l["externe"]:
             l["rang"] = None
     return lignes
 
@@ -242,14 +249,16 @@ def lignes_publiques(lignes: list[dict], viewer_id: int | None, staff: bool) -> 
 def stats_membre(db: Session, user: Utilisateur, semestre: Semestre | None) -> dict:
     """Points, rang, présences et évolution d'un membre sur un semestre."""
     if not semestre:
-        return {"semestre": None, "points": 0.0, "rang": None, "hors_classement": user.role_utilisateur != "user",
+        return {"semestre": None, "points": 0.0, "rang": None,
+                "hors_classement": user.role_utilisateur != "user" or user.externe,
                 "nb_membres_classes": 0,
                 "seances_semestre": 0, "presences": 0, "taux_presence": 0.0, "evolution": []}
     lignes = classement(db, semestre.id)
-    hors_classement = user.role_utilisateur != "user"
+    hors_classement = user.role_utilisateur != "user" or user.externe
     if hors_classement:
-        # Le staff n'est pas classé, mais garde ses propres points
-        moi = classement(db, semestre.id, inclure_staff=True, inclure_zero=True, user_id=user.id)[0]
+        # Modération et externes ne sont pas classés, mais gardent leurs propres points
+        moi = classement(db, semestre.id, inclure_staff=True, inclure_externes=True, inclure_zero=True,
+                         user_id=user.id)[0]
     else:
         moi = next((l for l in lignes if l["userId"] == user.id), None)
     nb_seances = db.query(func.count(Seance.id)).filter(

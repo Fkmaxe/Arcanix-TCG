@@ -40,9 +40,11 @@ export default function ClassementPage() {
                         <Podium lignes={lignes} />
                     </div>
 
-                    {isStaff(me) && (
+                    {(isStaff(me) || me?.externe) && (
                         <p className="bg-muted/60 text-muted-foreground rounded-xl p-3 text-center text-sm">
-                            Modération et admins n&apos;apparaissent pas dans le classement : il est réservé aux membres.
+                            {me?.externe && !isStaff(me)
+                                ? "En tant que membre externe, tu n'apparais pas dans le classement : il est réservé aux élèves. Tes points restent visibles sur ton profil."
+                                : "Modération, admins et membres externes n'apparaissent pas dans le classement : il est réservé aux élèves."}
                         </p>
                     )}
                     {moi && moi.rang > 3 && (

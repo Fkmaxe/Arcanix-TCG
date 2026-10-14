@@ -239,7 +239,6 @@ export interface StatPoints {
     nom: string;
     prenom: string;
     classe: string | null;
-    externe: boolean;
     role: Role;
     points: number;
     presences: number;

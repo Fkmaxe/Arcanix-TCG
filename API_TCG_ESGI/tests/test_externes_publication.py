@@ -212,3 +212,35 @@ def test_preference_email_dans_le_profil(client, make_user):
     u = make_user(email=f"u@{DOMAINE}", classe="1A")
     r = client.patch("/me", json={"annonces_email": False}, headers=auth(u))
     assert r.status_code == 200 and r.json()["annonces_email"] is False
+
+
+def test_externes_hors_classement_et_hors_exports(client, make_user):
+    """Le rendu de points ne contient que les élèves : les externes gardent leurs points pour eux seuls."""
+    admin = make_user("admin", prenom="Ada")
+    eleve = make_user(prenom="Eli", discord_id="21", email=f"eli@{DOMAINE}", classe="1A")
+    r = _inscription(client, adresse_mail="ext@gmail.com", externe=True, prenom="Xavier")
+    externe_id = r.json()["id"]
+    client.patch(f"/users/{externe_id}", json={"nom": "Ext"}, headers=auth(admin))
+    with engine.begin() as c:
+        c.execute(text("UPDATE utilisateur SET discord_id = '22' WHERE id = :i"), {"i": externe_id})
+    sem = client.post("/semestres", json={"annee": 2026, "numero": 1}, headers=auth(admin)).json()
+    s = client.post("/seances", headers=auth(admin), json={
+        "nom": "T", "date_seance": date.today().isoformat(), "nb_point": 5, "semestre_id": sem["id"]}).json()
+    client.put(f"/seances/{s['id']}/participants", headers=auth(admin),
+               json={"participants": [{"utilisateur_id": eleve.id}, {"utilisateur_id": externe_id}]})
+
+    # Classement, Discord, Top 3 : l'élève seul, premier
+    assert [l["prenom"] for l in client.get("/stats/classement", headers=auth(eleve)).json()["lignes"]] == ["Eli"]
+    assert client.get("/discord/roles", headers=BOT).json()["top3"] == ["21"]
+    # Exports : aucune trace de l'externe
+    assert all(p["prenom"] != "Xavier" for p in client.get(f"/stats/points?semestreId={sem['id']}", headers=auth(admin)).json())
+    for url in (f"/exports/points.csv?semestreId={sem['id']}", f"/exports/points.json?semestreId={sem['id']}",
+                f"/exports/participations.csv?semestreId={sem['id']}"):
+        corps = client.get(url, headers=auth(admin)).text
+        assert "Xavier" not in corps and "ext@gmail.com" not in corps, url
+        assert "Eli" in corps
+    # L'externe garde ses points, hors classement
+    tok = client.post("/auth/login", json={"email": "ext@gmail.com", "password": "motdepasse"}).json()["access_token"]
+    stats = client.get("/me/stats", headers={"Authorization": f"Bearer {tok}"}).json()
+    assert stats["points"] == 5 and stats["rang"] is None and stats["hors_classement"] is True
+    assert client.get("/discord/membres/22", headers=BOT).json()["hors_classement"] is True

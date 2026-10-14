@@ -76,9 +76,10 @@ def classe(m: dict) -> str:
 
 
 def texte_rang(m: dict) -> str:
-    """Rang d'un membre ; la modération n'est pas classée."""
+    """Rang d'un membre ; la modération et les membres externes ne sont pas classés."""
     if m.get("hors_classement"):
-        return "Hors classement (modération)"
+        return "Hors classement (membre externe)" if m.get("externe") and m.get("role_utilisateur") == "user" \
+            else "Hors classement (modération)"
     return f"#{m['rang']}" if m.get("rang") else "Non classé"
 
 

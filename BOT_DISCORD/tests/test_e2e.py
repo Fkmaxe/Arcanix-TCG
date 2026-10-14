@@ -47,13 +47,14 @@ async def test_parcours_complet_du_bot():
     bot = await _bot()
     try:
         nouveau = FakeUser(id=random.randint(10**17, 10**18), display_name="Nouveau")
-        email = f"e2e.{nouveau.id}@exemple.fr"
+        identifiant = f"e2e.{nouveau.id}"  # élève : l'identifiant seul suffit, le domaine est ajouté
+        email = f"{identifiant}@{config.EMAIL_DOMAINE_ECOLE}"
 
         # 1. /register -> formulaire -> lien privé
         compte = Compte(bot)
         inter = FakeInteraction(nouveau)
         await lancer(compte.register.callback(compte, inter), inter)
-        await lancer(remplir(inter.response.modal, prenom="Alex", nom="Testeur", email=email, classe="1A").on_submit(inter), inter)
+        await lancer(remplir(inter.response.modal, prenom="Alex", nom="Testeur", email=identifiant, classe="1A").on_submit(inter), inter)
         # Bouton si FRONTEND_URL est publique, sinon lien écrit en clair (jamais de « réfléchit… » bloqué)
         boutons = inter.dernier.boutons
         lien = boutons[0].url if boutons else re.search(r"\S+/activer\?jeton=\S+", inter.dernier.texte).group(0)

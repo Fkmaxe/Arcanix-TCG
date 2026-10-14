@@ -42,8 +42,9 @@ docker compose up -d --build --remove-orphans   # --remove-orphans arrête les c
   recalculés à chaque correction ; annonce automatique sur Discord.
 - **Journal** : chaque présence, point, rôle, séance… avec son auteur et l'heure (*Gestion → Journal*, ou
   *Historique* depuis la fiche d'un membre).
-- **Classement** réservé aux membres : modérateurs et admins n'y figurent pas (ni podium, ni rôle Top 3) ;
-  les exports CSV/JSON les listent sans rang, avec leur rôle et la colonne bonus/malus.
+- **Classement** réservé aux élèves : modérateurs, admins et membres externes n'y figurent pas (ni podium,
+  ni rôle Top 3) et gardent leurs points sur leur profil. Les exports CSV/JSON (le rendu de points) ne
+  contiennent que les élèves, plus la modération listée sans rang ; les externes n'y figurent pas.
 - Profil (graphique, historique, notifications).
 
 ## Emails (SMTP)

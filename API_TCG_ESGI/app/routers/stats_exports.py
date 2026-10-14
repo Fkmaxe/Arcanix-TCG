@@ -20,14 +20,14 @@ staff = require_roles("admin", "moderator")
 @router.get("/stats/points")
 def stats_points(semestreId: int | None = None, classe: str | None = None, userId: int | None = None,
                  db: Session = Depends(get_db), _=Depends(staff)):
-    """Points de tous les comptes (y compris à 0) — réservé à la modération.
+    """Points des élèves (y compris à 0) — réservé à la modération.
 
-    Modérateurs et admins sont listés mais pas classés (`rang` vide).
+    Modérateurs et admins sont listés mais pas classés (`rang` vide) ; les externes n'y figurent pas.
     """
     lignes = classement(db, semestreId, inclure_zero=True, inclure_staff=True, classe=classe, user_id=userId)
     return [
         {"rang": l["rang"], "userId": l["userId"], "nom": l["nom"], "prenom": l["prenom"], "role": l["role"],
-         "classe": l["classe"], "externe": l["externe"], "points": l["points"], "presences": l["presences"],
+         "classe": l["classe"], "points": l["points"], "presences": l["presences"],
          "bonus": l["bonus"]}
         for l in lignes
     ]
@@ -67,6 +67,7 @@ def export_participations_csv(semestreId: int | None = None, db: Session = Depen
         db.query(Participation, Seance, Utilisateur)
         .join(Seance, Seance.id == Participation.seance_id)
         .join(Utilisateur, Utilisateur.id == Participation.utilisateur_id)
+        .filter(Utilisateur.externe.is_(False))  # le rendu de points ne concerne que les élèves
     )
     if semestreId:
         q = q.filter(Seance.semestre_id == semestreId)
@@ -85,7 +86,7 @@ def export_participations_csv(semestreId: int | None = None, db: Session = Depen
 @router.get("/exports/points.csv")
 def export_points_csv(semestreId: int | None = None, db: Session = Depends(get_db), _=Depends(staff)):
     lignes = classement(db, semestreId, inclure_zero=True, inclure_staff=True)
-    rows = [[l["rang"] or "", l["nom"], l["prenom"], l["role"], l["classe"] or ("externe" if l["externe"] else ""),
+    rows = [[l["rang"] or "", l["nom"], l["prenom"], l["role"], l["classe"] or "",
              l["adresse_mail"], l["presences"], f'{l["bonus"]:g}'.replace(".", ","), f'{l["points"]:g}'.replace(".", ",")]
             for l in lignes]
     return _csv_response(rows, ["rang", "nom", "prenom", "role", "classe", "email", "presences", "bonus_malus", "points"],
@@ -99,7 +100,7 @@ def export_points_json(semestreId: int | None = None, db: Session = Depends(get_
     payload = {
         "semestre": SemestreOut.model_validate(s).model_dump() if s else None,
         "exporte_le": date.today().isoformat(),
-        "membres": [{k: l[k] for k in ("rang", "nom", "prenom", "role", "classe", "externe", "adresse_mail", "presences",
+        "membres": [{k: l[k] for k in ("rang", "nom", "prenom", "role", "classe", "adresse_mail", "presences",
                                        "bonus", "points")}
                     for l in lignes],
     }

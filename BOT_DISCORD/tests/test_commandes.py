@@ -576,6 +576,14 @@ async def test_points_staff_hors_classement():
 
 
 @run_async
+async def test_points_externe_hors_classement():
+    m = {**MEMBRE, "classe": None, "externe": True, "rang": None, "hors_classement": True}
+    cog, inter = Membres(FakeBot(FakeApi(membre=m))), FakeInteraction()
+    await lancer(cog.points.callback(cog, inter), inter)
+    assert "Hors classement (membre externe)" in inter.dernier.texte
+
+
+@run_async
 async def test_profil_externe():
     m = {**MEMBRE, "classe": None, "externe": True}
     cog, inter = Membres(FakeBot(FakeApi(membre=m))), FakeInteraction()
